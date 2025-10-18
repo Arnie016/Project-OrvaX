@@ -6,10 +6,17 @@ import DentalChart3D from './components/PerioChart.tsx';
 import { InfoPanel } from './components/Tooth.tsx';
 import Toolbar from './components/Toolbar.tsx';
 import { fetchDbMeasurements, processDbMeasurements } from './dbDataSync.ts';
+import TextWindow from './components/TextWindow.tsx';
+import { ToothModelGuide } from './components/ToothModelGuide.tsx';
+import { localToothStorage } from './services/localToothStorage';
 
 // A custom hook to manage chart data logic, defined in-file to avoid adding new files.
 const useChartData = () => {
-  const [data, setData] = useState<ToothData[]>(INITIAL_CHART_DATA);
+  const [data, setData] = useState<ToothData[]>(() => {
+    // Try to load from localStorage first
+    const savedData = localToothStorage.loadToothData();
+    return savedData || INITIAL_CHART_DATA;
+  });
 
   const calculateData = (tooth: ToothData): { cal: PerioSiteMeasurements, riskScore: number } => {
     const cal: PerioSiteMeasurements = {};
@@ -77,25 +84,41 @@ const useChartData = () => {
     type: MeasurementType,
     value: MeasurementSiteValue
   ) => {
+    console.log('🔄 App.tsx - updateChartData called:', { toothId, location, type, value });
+    
     setData(prevData => {
       const newData = [...prevData];
       const toothIndex = newData.findIndex(t => t.id === toothId);
-      if (toothIndex === -1) return prevData;
+      if (toothIndex === -1) {
+        console.log('❌ Tooth not found:', toothId);
+        return prevData;
+      }
 
       const newToothData = JSON.parse(JSON.stringify(newData[toothIndex]));
+      console.log('📊 Before update - tooth data:', newToothData.measurements);
 
       if (type === MeasurementType.MOBILITY) {
         newToothData.mobility = value as number;
+        console.log('🦷 Updated mobility:', value);
       } else if (type === MeasurementType.FURCATION) {
         if (!newToothData.furcation) newToothData.furcation = {};
         if (location === 'furcation_buccal') newToothData.furcation.buccal = value as number;
         if (location === 'furcation_lingual') newToothData.furcation.lingual = value as number;
+        console.log('🦷 Updated furcation:', newToothData.furcation);
       } else {
         const measurementBlock = newToothData.measurements[type] || {};
         measurementBlock[location] = value;
         newToothData.measurements[type] = measurementBlock;
+        console.log('🦷 Updated measurements:', type, location, value);
       }
+      
+      console.log('📊 After update - tooth data:', newToothData.measurements);
       newData[toothIndex] = newToothData;
+      
+      // Save to localStorage after each update
+      localToothStorage.saveToothData(newData);
+      console.log('💾 Data saved to localStorage');
+      
       return newData;
     });
   }, []);
@@ -109,18 +132,27 @@ function App() {
   const [selectedToothId, setSelectedToothId] = useState<number | null>(null);
   const [activeSurface, setActiveSurface] = useState<'buccal' | 'lingual' | null>('buccal');
   const [showPlaque, setShowPlaque] = useState(false);
+  const [showTextWindow, setShowTextWindow] = useState(false);
+  const [showHelpWindow, setShowHelpWindow] = useState(false);
   const [cameraControls, setCameraControls] = useState<any>(null);
   const [blinkingTeeth, setBlinkingTeeth] = useState<Set<number>>(new Set());
+  const [ttsText, setTtsText] = useState<string>('');
   const lastFetchTimeRef = useRef<string>('');
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const selectedToothData = useMemo(() => {
-    return chartData.find(t => t.id === selectedToothId) || null;
+    const tooth = chartData.find(t => t.id === selectedToothId) || null;
+    console.log('🦷 App.tsx - selectedToothData updated:', { selectedToothId, tooth });
+    return tooth;
   }, [selectedToothId, chartData]);
 
   const handleToothSelect = useCallback((toothId: number) => {
     if (chartData.find(t => t.id === toothId)?.isMissing) return;
     setSelectedToothId(currentId => currentId === toothId ? null : toothId);
+    // Automatically open analysis window when tooth is selected
+    if (toothId) {
+      setShowTextWindow(true);
+    }
   }, [chartData]);
   
   const handleSetSurface = useCallback((surface: 'buccal' | 'lingual' | null) => {
@@ -201,6 +233,20 @@ function App() {
     };
   }, [syncDatabaseData]);
 
+  const handleToggleTextWindow = useCallback(() => {
+    setShowTextWindow(prev => !prev);
+  }, []);
+
+  const handleHelp = useCallback(() => {
+    setShowHelpWindow(prev => !prev);
+  }, []);
+
+  const handleOverallAnalysis = useCallback(() => {
+    // Clear selected tooth to trigger overall analysis
+    setSelectedToothId(null);
+    setShowTextWindow(true);
+  }, []);
+
   return (
     <div className="w-screen h-screen font-sans">
        <header className="absolute top-0 left-0 w-full p-4 z-20 flex justify-between items-center pointer-events-none">
@@ -209,7 +255,15 @@ function App() {
           <p className="text-md text-slate-300 drop-shadow-md">Interactive 3D Assessment Tool</p>
         </div>
         <div className="pointer-events-auto">
-          <Toolbar onResetCamera={handleResetCamera} onTogglePlaque={handleTogglePlaque} isPlaqueVisible={showPlaque} />
+          <Toolbar 
+            onResetCamera={handleResetCamera} 
+            onTogglePlaque={handleTogglePlaque} 
+            isPlaqueVisible={showPlaque}
+                    onToggleTextWindow={handleToggleTextWindow}
+                    isTextWindowVisible={showTextWindow}
+                    onOverallAnalysis={handleOverallAnalysis}
+                    onHelp={handleHelp}
+          />
         </div>
       </header>
       
@@ -235,6 +289,19 @@ function App() {
           overallScores={overallScores}
         />
       )}
+
+      <TextWindow 
+        isVisible={showTextWindow} 
+        onClose={() => setShowTextWindow(false)}
+        selectedToothId={selectedToothId}
+        chartData={chartData}
+        onTextUpdate={setTtsText}
+      />
+
+      <ToothModelGuide 
+        isVisible={showHelpWindow}
+        onClose={() => setShowHelpWindow(false)}
+      />
 
       <footer className="absolute bottom-0 left-0 p-2 text-slate-400 text-xs z-10">
         <p>Not for clinical use. All data is for demonstration purposes only.</p>

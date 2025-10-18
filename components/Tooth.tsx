@@ -146,11 +146,16 @@ const Stepper: React.FC<{ value: number, onChange: (val: number) => void, severi
     else if (value === 4) severityClass = 'bg-yellow-700 border-yellow-500';
   }
   
+  const handleChange = (newValue: number) => {
+    console.log('🔢 Stepper - onChange called:', { oldValue: value, newValue });
+    onChange(newValue);
+  };
+  
   return (
   <div className={`flex items-center justify-center rounded-md border transition-colors ${severityClass}`}>
-    <button onClick={() => onChange(Math.max(0, value - 1))} className="px-2 py-1 text-lg hover:bg-gray-600 rounded-l-md">-</button>
+    <button onClick={() => handleChange(Math.max(0, value - 1))} className="px-2 py-1 text-lg hover:bg-gray-600 rounded-l-md">-</button>
     <span className="w-8 text-center font-mono text-lg">{value}</span>
-    <button onClick={() => onChange(value + 1)} className="px-2 py-1 text-lg hover:bg-gray-600 rounded-r-md">+</button>
+    <button onClick={() => handleChange(value + 1)} className="px-2 py-1 text-lg hover:bg-gray-600 rounded-r-md">+</button>
   </div>
 )};
 
@@ -195,6 +200,7 @@ const SurfaceDataEntry: React.FC<{
   const locations = [`disto_${surface}`, `mid_${surface}`, `mesio_${surface}`] as const;
 
   const handleUpdate = (type: MeasurementType, location: MeasurementLocation, value: MeasurementSiteValue) => {
+    console.log('🦷 SurfaceDataEntry - handleUpdate called:', { type, location, value });
     onUpdate(type, location, value);
   };
   
@@ -350,8 +356,14 @@ Measurements:
     </aside> );
   }
   
-  const handleUpdate = (type: MeasurementType, location: MeasurementLocation, value: MeasurementSiteValue) => onUpdate(id, location, type, value);
-  const handleNonSiteUpdate = (type: MeasurementType, location: NonSiteLocation, value: MeasurementSiteValue) => onUpdate(id, location, type, value);
+  const handleUpdate = (type: MeasurementType, location: MeasurementLocation, value: MeasurementSiteValue) => {
+    console.log('🦷 InfoPanel - handleUpdate called:', { id, location, type, value });
+    onUpdate(id, location, type, value);
+  };
+  const handleNonSiteUpdate = (type: MeasurementType, location: NonSiteLocation, value: MeasurementSiteValue) => {
+    console.log('🦷 InfoPanel - handleNonSiteUpdate called:', { id, location, type, value });
+    onUpdate(id, location, type, value);
+  };
   const lingualSurfaceTitle = id <= 16 ? 'Palatal' : 'Lingual';
 
   return (

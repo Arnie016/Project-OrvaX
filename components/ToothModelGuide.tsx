@@ -1,25 +1,19 @@
-import React, { useState } from 'react';
+import React from 'react';
 
-export const ToothModelGuide: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(true);
+interface ToothModelGuideProps {
+  isVisible?: boolean;
+  onClose?: () => void;
+}
 
-  if (!isOpen) {
-    return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="absolute top-4 left-4 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg shadow-lg text-sm font-semibold z-50"
-      >
-        ? Help
-      </button>
-    );
-  }
+export const ToothModelGuide: React.FC<ToothModelGuideProps> = ({ isVisible = false, onClose }) => {
+  if (!isVisible) return null;
 
   return (
-    <div className="absolute top-4 left-4 bg-gray-900/95 border border-gray-700 rounded-lg shadow-2xl p-4 w-96 max-h-[80vh] overflow-y-auto z-40">
+    <div className="fixed top-32 left-4 bg-[rgba(25,30,45,0.8)] border border-[rgba(255,255,255,0.1)] rounded-2xl shadow-2xl p-4 text-white w-80 max-h-[60vh] flex flex-col z-50">
       <div className="flex justify-between items-center mb-3">
         <h3 className="text-white font-bold text-lg">3D Tooth Models Guide</h3>
         <button
-          onClick={() => setIsOpen(false)}
+          onClick={onClose}
           className="text-gray-400 hover:text-white text-xl leading-none"
         >
           ×
@@ -108,7 +102,7 @@ export const ToothModelGuide: React.FC = () => {
       </div>
 
       <button
-        onClick={() => setIsOpen(false)}
+        onClick={onClose}
         className="w-full mt-4 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors font-semibold"
       >
         Got it!

@@ -376,7 +376,6 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
-  const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0, z: 0 });
   const [shouldMoveCamera, setShouldMoveCamera] = useState(false);
   const [showTransformControls, setShowTransformControls] = useState(false);
   const [controlsToothId, setControlsToothId] = useState<number | null>(null);
@@ -630,12 +629,6 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
       requestAnimationFrame(animate);
       controls.update();
       
-      // Update camera position display
-      setCameraPosition({
-        x: Math.round(camera.position.x * 100) / 100,
-        y: Math.round(camera.position.y * 100) / 100,
-        z: Math.round(camera.position.z * 100) / 100
-      });
       
       const currentTime = clock.getElapsedTime();
       
@@ -1054,12 +1047,6 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
         </div>
       )}
       
-      <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded-lg font-mono text-sm">
-        <div className="text-xs text-gray-300 mb-1">Camera Position:</div>
-        <div>X: {cameraPosition.x}</div>
-        <div>Y: {cameraPosition.y}</div>
-        <div>Z: {cameraPosition.z}</div>
-      </div>
 
       {/* Keyboard Help Toggle Button */}
       {selectedToothData && (
