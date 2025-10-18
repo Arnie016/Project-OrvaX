@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import ChatPanel from './ChatPanel.tsx';
 import { GoogleGenAI } from "@google/genai";
 import { ToothData, MeasurementType, MeasurementLocation, MeasurementSiteValue, NonSiteLocation } from '../types.ts';
 import { getUniversalToothId, getPalmerNotation } from '../constants.ts';
@@ -197,7 +198,15 @@ const SurfaceDataEntry: React.FC<{
   const bopData = measurements[MeasurementType.BLEEDING] || {};
   const plaqueData = measurements[MeasurementType.PLAQUE] || {};
 
-  const locations = [`disto_${surface}`, `mid_${surface}`, `mesio_${surface}`] as const;
+  const toLoc = (
+    s: 'buccal' | 'lingual',
+    pos: 'disto' | 'mid' | 'mesio'
+  ): MeasurementLocation => `${pos}_${s}` as MeasurementLocation;
+  const locations: MeasurementLocation[] = [
+    toLoc(surface, 'disto'),
+    toLoc(surface, 'mid'),
+    toLoc(surface, 'mesio')
+  ];
 
   const handleUpdate = (type: MeasurementType, location: MeasurementLocation, value: MeasurementSiteValue) => {
     console.log('🦷 SurfaceDataEntry - handleUpdate called:', { type, location, value });
@@ -253,6 +262,7 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({ toothData, onUpdate, onClo
   const [aiReport, setAiReport] = useState('');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   
   const isListening = useMemo(() => !!command, [command]);
 
@@ -478,6 +488,22 @@ Measurements:
             </div>
         </section>
         
+        <div className="flex gap-2">
+          <button
+            onClick={handleGenerateReport}
+            disabled={isGeneratingReport}
+            className="px-3 py-2 text-xs bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+          >
+            {isGeneratingReport ? '...' : 'AI Summary'}
+          </button>
+          <button
+            onClick={() => setIsChatOpen(true)}
+            className="px-3 py-2 text-xs bg-blue-600 rounded-md hover:bg-blue-500 transition-colors"
+          >
+            Chat
+          </button>
+        </div>
+
         {/* Icon on left edge */}
         <div className="absolute bottom-0 left-0 flex items-center justify-center w-8 h-8">
           <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
@@ -518,6 +544,8 @@ Measurements:
           <div className="w-full h-full bg-gray-500 rounded-br-2xl"></div>
         </div>
       </aside>
+
+      <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} toothData={toothData} />
 
       {isReportModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
