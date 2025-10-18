@@ -620,15 +620,6 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
     let clickTimeout: NodeJS.Timeout | null = null;
     let clickCount = 0;
     
-    // Helper function to get quadrant from tooth ID
-    const getQuadrant = (toothId: number): string => {
-      if (toothId >= 1 && toothId <= 8) return 'Upper Right (Q1)';
-      if (toothId >= 9 && toothId <= 16) return 'Upper Left (Q2)';
-      if (toothId >= 17 && toothId <= 24) return 'Lower Left (Q3)';
-      if (toothId >= 25 && toothId <= 32) return 'Lower Right (Q4)';
-      return 'Unknown';
-    };
-    
     const handleMouseMove = (event: MouseEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -665,21 +656,19 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
                 if (clickCount === 1) {
                     // First click - wait to see if there's a second click
                     clickTimeout = setTimeout(() => {
-                        // Single click
+                        // Single click - select without camera movement
                         setShouldMoveCamera(false);
                         onToothSelect(toothId);
                         clickCount = 0;
                     }, 300); // 300ms delay to detect double click
                 } else if (clickCount === 2) {
-                    // Double click detected - open transform controls
+                    // Double click - select with camera movement
                     if (clickTimeout) {
                         clearTimeout(clickTimeout);
                         clickTimeout = null;
                     }
                     setShouldMoveCamera(true);
                     onToothSelect(toothId);
-                    setControlsToothId(toothId);
-                    setShowTransformControls(true);
                     clickCount = 0;
                 }
                 return;
@@ -921,6 +910,16 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
           event.preventDefault();
           setShowKeyboardHelp(prev => !prev);
           break;
+
+        // Y: Open transform controls
+        case 'y':
+          event.preventDefault();
+          if (selectedId) {
+            setShouldMoveCamera(true);
+            setControlsToothId(selectedId);
+            setShowTransformControls(true);
+          }
+          break;
       }
 
       if (changed) {
@@ -1032,7 +1031,9 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
 
             <div className="pt-3 border-t border-gray-700 text-xs text-gray-400 italic">
               <div>• Press H to toggle this help</div>
-              <div>• Select a tooth first to use controls</div>
+              <div>• Single click to select a tooth</div>
+              <div>• Double click for camera zoom to tooth</div>
+              <div>• Press Y to open Transform Controls panel</div>
               <div>• Changes apply in real-time</div>
               <div>• Don't forget to Save in the panel!</div>
             </div>
