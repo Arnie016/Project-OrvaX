@@ -362,6 +362,7 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
   const gltfLoaderRef = useRef<GLTFLoader>(new GLTFLoader());
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [hoveredTooth, setHoveredTooth] = useState<{ id: number; x: number; y: number } | null>(null);
+  const cameraAnimationTriggeredRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -661,7 +662,7 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
                         onToothSelect(toothId);
                         clickCount = 0;
                     }, 300); // 300ms delay to detect double click
-                } else if (clickCount === 2) {
+                } else if (clickCount >= 2) {
                     // Double click - select with camera movement
                     if (clickTimeout) {
                         clearTimeout(clickTimeout);
@@ -669,10 +670,16 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
                     }
                     setShouldMoveCamera(true);
                     onToothSelect(toothId);
-                    clickCount = 0;
+                    clickCount = 0; // Reset immediately to prevent multiple triggers
                 }
                 return;
             }
+        }
+        // Reset click count if clicking outside a tooth
+        clickCount = 0;
+        if (clickTimeout) {
+            clearTimeout(clickTimeout);
+            clickTimeout = null;
         }
     };
     
@@ -693,6 +700,11 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
     const selectedId = selectedToothData?.id;
     const controls = controlsRef.current;
     const camera = cameraRef.current;
+
+    // Reset camera animation flag when a new tooth is selected or when shouldMoveCamera changes to false
+    if (!shouldMoveCamera) {
+      cameraAnimationTriggeredRef.current = false;
+    }
 
     Object.keys(toothMeshesRef.current).forEach((id) => {
         const group = toothMeshesRef.current[Number(id)];
@@ -718,10 +730,13 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
         }
     });
 
-    if (selectedId && toothMeshesRef.current[selectedId] && controls && camera && shouldMoveCamera) {
+    if (selectedId && toothMeshesRef.current[selectedId] && controls && camera && shouldMoveCamera && !cameraAnimationTriggeredRef.current) {
       const targetToothGroup = toothMeshesRef.current[selectedId];
       const targetPosition = new THREE.Vector3();
       targetToothGroup.getWorldPosition(targetPosition);
+
+      // Mark animation as triggered to prevent repeated animations
+      cameraAnimationTriggeredRef.current = true;
 
       gsap.to(controls.target, { 
         x: targetPosition.x, y: targetPosition.y, z: targetPosition.z, 
@@ -729,7 +744,11 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
       });
       gsap.to(camera.position, {
         x: targetPosition.x, y: targetPosition.y + 1.5, z: targetPosition.z + 4,
-        duration: 0.8, ease: 'power2.inOut'
+        duration: 0.8, ease: 'power2.inOut',
+        onComplete: () => {
+          // Reset shouldMoveCamera after animation completes
+          setShouldMoveCamera(false);
+        }
       });
       
       const pd = selectedToothData.measurements[MeasurementType.POCKET_DEPTH] || {};

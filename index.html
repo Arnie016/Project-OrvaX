@@ -21,9 +21,19 @@
 }
 </script>
 <link rel="stylesheet" href="/index.css">
+<style>
+  elevenlabs-convai {
+    position: fixed !important;
+    bottom: 20px !important;
+    right: 20px !important;
+    z-index: 9999 !important;
+  }
+</style>
 </head>
   <body class="bg-[#10141C] text-slate-100">
     <div id="root"></div>
+    <elevenlabs-convai agent-id="agent_2101k1ggpm29ezeacp2xq2b78qsc"></elevenlabs-convai>
+    <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
     <script type="module" src="./index.tsx"></script>
   <script type="module" src="/index.tsx"></script>
 </body>
