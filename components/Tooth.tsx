@@ -488,7 +488,7 @@ Measurements:
             </div>
         </section>
         
-        <div className="flex gap-2">
+        <div className="flex gap-2 sticky bottom-0 pt-2">
           <button
             onClick={handleGenerateReport}
             disabled={isGeneratingReport}

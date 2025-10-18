@@ -393,6 +393,7 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
   const gltfLoaderRef = useRef<GLTFLoader>(new GLTFLoader());
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [hoveredTooth, setHoveredTooth] = useState<{ id: number; x: number; y: number } | null>(null);
+  const [showGuide, setShowGuide] = useState<boolean>(false);
   const cameraAnimationTriggeredRef = useRef<boolean>(false);
 
   useEffect(() => {
@@ -1026,7 +1027,19 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
     <div className="relative w-full h-full">
       <div ref={mountRef} className="w-full h-full" />
       
-      <ToothModelGuide />
+      {/* Overlapping floating actions: Help */}
+      <div className="fixed top-4 left-4 z-50 flex flex-col gap-2 pointer-events-auto">
+        <button
+          onClick={() => setShowGuide(prev => !prev)}
+          className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg shadow"
+          title="Toggle Help"
+        >
+          ? Help
+        </button>
+      </div>
+
+      {/* Render guide panel */}
+      <ToothModelGuide isVisible={showGuide} onClose={() => setShowGuide(false)} />
       
       {/* Tooth Hover Tooltip */}
       {hoveredTooth && (
