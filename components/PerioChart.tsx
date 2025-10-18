@@ -2,9 +2,19 @@
 import React, { useRef, useEffect, memo, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { gsap } from 'gsap';
 import { ToothData, MeasurementType } from '../types.ts';
 import { TOOTH_POSITIONS, getToothType } from '../constants.ts';
+import { ToothTransformControls } from './ToothTransformControls.tsx';
+import { ToothModelGuide } from './ToothModelGuide.tsx';
+import { 
+  getToothModelConfig, 
+  ToothTransform, 
+  getDefaultTransform,
+  loadToothTransforms,
+  saveToothTransforms
+} from '../toothModelMapping.ts';
 
 // --- GLSL Shaders ---
 
@@ -332,13 +342,18 @@ interface DentalChart3DProps {
 
 const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothData, onToothSelect, showPlaque, setCameraControls, activeSurface }) => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const toothMeshesRef = useRef<{ [id: number]: THREE.Mesh }>({});
+  const toothMeshesRef = useRef<{ [id: number]: THREE.Group }>({});
   const gumMeshesRef = useRef<THREE.Mesh[]>([]);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0, z: 0 });
   const [shouldMoveCamera, setShouldMoveCamera] = useState(false);
+  const [showTransformControls, setShowTransformControls] = useState(false);
+  const [controlsToothId, setControlsToothId] = useState<number | null>(null);
+  const [toothTransforms, setToothTransforms] = useState<{ [toothId: number]: ToothTransform }>({});
+  const gltfLoaderRef = useRef<GLTFLoader>(new GLTFLoader());
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -366,48 +381,133 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
     setCameraControls(controls);
     controlsRef.current = controls;
 
-    chartData.forEach(toothData => {
+    // Load saved transformations
+    const savedTransforms = loadToothTransforms();
+    setToothTransforms(savedTransforms);
+
+    // Function to load a tooth model from GLB
+    const loadToothModel = (toothData: ToothData) => {
       if (toothData.isMissing) return;
-      const toothType = getToothType(toothData.id);
+      
+      const modelConfig = getToothModelConfig(toothData.id);
+      if (!modelConfig) {
+        console.warn(`No model config found for tooth ${toothData.id}`);
+        return;
+      }
+
       const position = TOOTH_POSITIONS[toothData.id];
       const risk = (toothData.riskScore || 0) / 50;
+      const toothTransform = savedTransforms[toothData.id] || getDefaultTransform();
 
-      const material = new THREE.ShaderMaterial({
-        vertexShader: toothVertexShader,
-        fragmentShader: toothFragmentShader,
-        uniforms: {
-          riskScore: { value: risk },
-          isSelected: { value: false },
-          isDimmed: { value: false },
-          showPlaque: { value: showPlaque },
-          activeSurfaceHighlight: { value: 0.0 },
-        },
-        transparent: true
-      });
-
-      let geometry: THREE.BufferGeometry;
-      switch(toothType) {
-        case 'molar': geometry = createMolarGeometry(); break;
-        case 'premolar': geometry = createPremolarGeometry(); break;
-        case 'canine': geometry = createCanineGeometry(); break;
-        default: geometry = createIncisorGeometry();
-      }
+      // Create a wrapper group for the tooth
+      const toothGroup = new THREE.Group();
+      toothGroup.userData = { id: toothData.id, type: 'tooth' };
       
-      const toothMesh = new THREE.Mesh(geometry, material);
-      toothMesh.position.set(position.x, position.y, position.z);
+      // Load the GLB model
+      gltfLoaderRef.current.load(
+        modelConfig.modelFile,
+        (gltf) => {
+          const model = gltf.scene;
+          
+          // Apply shader material to all meshes in the model
+          model.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              const material = new THREE.ShaderMaterial({
+                vertexShader: toothVertexShader,
+                fragmentShader: toothFragmentShader,
+                uniforms: {
+                  riskScore: { value: risk },
+                  isSelected: { value: false },
+                  isDimmed: { value: false },
+                  showPlaque: { value: showPlaque },
+                  activeSurfaceHighlight: { value: 0.0 },
+                },
+                transparent: true
+              });
+              child.material = material;
+              child.userData = { id: toothData.id, type: 'tooth' };
+            }
+          });
+
+          // Apply mirroring if needed (for right-side teeth)
+          if (modelConfig.shouldMirror) {
+            model.scale.x *= -1;
+          }
+
+          // Apply custom transformations
+          model.position.set(
+            toothTransform.position.x,
+            toothTransform.position.y,
+            toothTransform.position.z
+          );
+          model.rotation.set(
+            toothTransform.rotation.x,
+            toothTransform.rotation.y,
+            toothTransform.rotation.z
+          );
+          model.scale.set(
+            model.scale.x * toothTransform.scale.x,
+            model.scale.y * toothTransform.scale.y,
+            model.scale.z * toothTransform.scale.z
+          );
+
+          toothGroup.add(model);
+        },
+        undefined,
+        (error) => {
+          console.error(`Error loading model for tooth ${toothData.id}:`, error);
+          // Fallback to procedural geometry if GLB fails to load
+          const toothType = getToothType(toothData.id);
+          let geometry: THREE.BufferGeometry;
+          switch(toothType) {
+            case 'molar': geometry = createMolarGeometry(); break;
+            case 'premolar': geometry = createPremolarGeometry(); break;
+            case 'canine': geometry = createCanineGeometry(); break;
+            default: geometry = createIncisorGeometry();
+          }
+          
+          const material = new THREE.ShaderMaterial({
+            vertexShader: toothVertexShader,
+            fragmentShader: toothFragmentShader,
+            uniforms: {
+              riskScore: { value: risk },
+              isSelected: { value: false },
+              isDimmed: { value: false },
+              showPlaque: { value: showPlaque },
+              activeSurfaceHighlight: { value: 0.0 },
+            },
+            transparent: true
+          });
+          
+          const fallbackMesh = new THREE.Mesh(geometry, material);
+          fallbackMesh.userData = { id: toothData.id, type: 'tooth' };
+          
+          // Apply mirroring for right-side teeth
+          if (modelConfig.shouldMirror) {
+            fallbackMesh.scale.x *= -1;
+          }
+          
+          toothGroup.add(fallbackMesh);
+        }
+      );
+
+      // Position the group in the arch
+      toothGroup.position.set(position.x, position.y, position.z);
       
       // Flip upper arch teeth upside down (teeth 1-16)
       if (toothData.id <= 16) {
-        toothMesh.rotation.y = position.rotationY;
-        toothMesh.rotation.x = Math.PI; // 180 degrees rotation around X-axis
+        toothGroup.rotation.y = position.rotationY;
+        toothGroup.rotation.x = Math.PI; // 180 degrees rotation around X-axis
       } else {
-        toothMesh.rotation.y = position.rotationY;
+        toothGroup.rotation.y = position.rotationY;
       }
-      
-      toothMesh.userData = { id: toothData.id, type: 'tooth' };
-      scene.add(toothMesh);
-      toothMeshesRef.current[toothData.id] = toothMesh;
-    });
+
+      scene.add(toothGroup);
+      toothMeshesRef.current[toothData.id] = toothGroup;
+    };
+
+    // Load all teeth
+    chartData.forEach(loadToothModel);
 
     const createGumArchFromTeeth = (
         allToothData: ToothData[], 
@@ -503,7 +603,8 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
         const intersects = raycaster.intersectObjects(scene.children, true);
         
         for (const intersect of intersects) {
-            if (intersect.object.userData.type === 'tooth') {
+            if (intersect.object.userData.type === 'tooth' || intersect.object.userData.id) {
+                const toothId = intersect.object.userData.id;
                 clickCount++;
                 
                 if (clickCount === 1) {
@@ -511,17 +612,19 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
                     clickTimeout = setTimeout(() => {
                         // Single click
                         setShouldMoveCamera(false);
-                        onToothSelect(intersect.object.userData.id);
+                        onToothSelect(toothId);
                         clickCount = 0;
                     }, 300); // 300ms delay to detect double click
                 } else if (clickCount === 2) {
-                    // Double click detected
+                    // Double click detected - open transform controls
                     if (clickTimeout) {
                         clearTimeout(clickTimeout);
                         clickTimeout = null;
                     }
                     setShouldMoveCamera(true);
-                    onToothSelect(intersect.object.userData.id);
+                    onToothSelect(toothId);
+                    setControlsToothId(toothId);
+                    setShowTransformControls(true);
                     clickCount = 0;
                 }
                 return;
@@ -545,24 +648,32 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
     const controls = controlsRef.current;
     const camera = cameraRef.current;
 
-    Object.entries(toothMeshesRef.current).forEach(([id, mesh]) => {
-        const material = mesh.material as THREE.ShaderMaterial;
+    Object.keys(toothMeshesRef.current).forEach((id) => {
+        const group = toothMeshesRef.current[Number(id)];
         const isCurrentlySelected = Number(id) === selectedId;
-        material.uniforms.isSelected.value = isCurrentlySelected;
-        material.uniforms.isDimmed.value = selectedId != null && !isCurrentlySelected;
+        
+        // Update materials for all meshes in the group
+        if (group) {
+          group.traverse((child) => {
+            if (child instanceof THREE.Mesh && child.material instanceof THREE.ShaderMaterial) {
+              child.material.uniforms.isSelected.value = isCurrentlySelected;
+              child.material.uniforms.isDimmed.value = selectedId != null && !isCurrentlySelected;
 
-        if (isCurrentlySelected) {
-            const highlightValue = activeSurface === 'buccal' ? 1.0 : activeSurface === 'lingual' ? -1.0 : 0.0;
-            material.uniforms.activeSurfaceHighlight.value = highlightValue;
-        } else {
-            material.uniforms.activeSurfaceHighlight.value = 0.0;
+              if (isCurrentlySelected) {
+                  const highlightValue = activeSurface === 'buccal' ? 1.0 : activeSurface === 'lingual' ? -1.0 : 0.0;
+                  child.material.uniforms.activeSurfaceHighlight.value = highlightValue;
+              } else {
+                  child.material.uniforms.activeSurfaceHighlight.value = 0.0;
+              }
+            }
+          });
         }
     });
 
     if (selectedId && toothMeshesRef.current[selectedId] && controls && camera && shouldMoveCamera) {
-      const targetTooth = toothMeshesRef.current[selectedId];
+      const targetToothGroup = toothMeshesRef.current[selectedId];
       const targetPosition = new THREE.Vector3();
-      targetTooth.getWorldPosition(targetPosition);
+      targetToothGroup.getWorldPosition(targetPosition);
 
       gsap.to(controls.target, { 
         x: targetPosition.x, y: targetPosition.y, z: targetPosition.z, 
@@ -596,26 +707,262 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
   
   useEffect(() => {
     chartData.forEach(toothData => {
-        const mesh = toothMeshesRef.current[toothData.id];
-        if (mesh) {
-            const material = mesh.material as THREE.ShaderMaterial;
-            if(material.uniforms) {
-              material.uniforms.riskScore.value = (toothData.riskScore || 0) / 50;
-              material.uniforms.showPlaque.value = showPlaque;
-            }
+        const group = toothMeshesRef.current[toothData.id];
+        if (group) {
+            group.traverse((child) => {
+              if (child instanceof THREE.Mesh && child.material instanceof THREE.ShaderMaterial) {
+                if(child.material.uniforms) {
+                  child.material.uniforms.riskScore.value = (toothData.riskScore || 0) / 50;
+                  child.material.uniforms.showPlaque.value = showPlaque;
+                }
+              }
+            });
         }
     });
   }, [chartData, showPlaque]);
 
+  // Handle transform changes from the control panel
+  const handleTransformChange = (toothId: number, transform: ToothTransform) => {
+    const group = toothMeshesRef.current[toothId];
+    if (group) {
+      // Find the model within the group (first child)
+      const model = group.children[0];
+      if (model) {
+        model.position.set(transform.position.x, transform.position.y, transform.position.z);
+        model.rotation.set(transform.rotation.x, transform.rotation.y, transform.rotation.z);
+        
+        // Get the model config to check if mirroring is applied
+        const modelConfig = getToothModelConfig(toothId);
+        const mirrorMultiplier = modelConfig?.shouldMirror ? -1 : 1;
+        
+        model.scale.set(
+          transform.scale.x * mirrorMultiplier,
+          transform.scale.y,
+          transform.scale.z
+        );
+      }
+    }
+    
+    setToothTransforms(prev => {
+      const updated = {
+        ...prev,
+        [toothId]: transform
+      };
+      // Also save to localStorage so the panel can pick up changes
+      saveToothTransforms(updated);
+      return updated;
+    });
+  };
+
+  // Keyboard controls for tooth transformation
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const selectedId = selectedToothData?.id;
+      if (!selectedId) return;
+
+      // Don't interfere if user is typing in an input
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      const currentTransform = toothTransforms[selectedId] || getDefaultTransform();
+      let newTransform = { ...currentTransform };
+      let changed = false;
+
+      const rotationStep = 5 * (Math.PI / 180); // 5 degrees
+      const positionStep = 0.05;
+      const uniformScaleStep = 0.01;
+
+      switch(event.key.toLowerCase()) {
+        // Arrow Keys: Rotation (Pitch & Yaw)
+        case 'arrowup':
+          event.preventDefault();
+          newTransform.rotation = { ...newTransform.rotation, x: newTransform.rotation.x + rotationStep };
+          changed = true;
+          break;
+        case 'arrowdown':
+          event.preventDefault();
+          newTransform.rotation = { ...newTransform.rotation, x: newTransform.rotation.x - rotationStep };
+          changed = true;
+          break;
+        case 'arrowleft':
+          event.preventDefault();
+          newTransform.rotation = { ...newTransform.rotation, y: newTransform.rotation.y - rotationStep };
+          changed = true;
+          break;
+        case 'arrowright':
+          event.preventDefault();
+          newTransform.rotation = { ...newTransform.rotation, y: newTransform.rotation.y + rotationStep };
+          changed = true;
+          break;
+
+        // WASD: Position (X & Y) - no limits
+        case 'w':
+          event.preventDefault();
+          newTransform.position = { ...newTransform.position, y: newTransform.position.y + positionStep };
+          changed = true;
+          break;
+        case 's':
+          event.preventDefault();
+          newTransform.position = { ...newTransform.position, y: newTransform.position.y - positionStep };
+          changed = true;
+          break;
+        case 'a':
+          event.preventDefault();
+          newTransform.position = { ...newTransform.position, x: newTransform.position.x - positionStep };
+          changed = true;
+          break;
+        case 'd':
+          event.preventDefault();
+          newTransform.position = { ...newTransform.position, x: newTransform.position.x + positionStep };
+          changed = true;
+          break;
+
+        // Q/E: Position Z (Forward/Back) - no limits
+        case 'q':
+          event.preventDefault();
+          newTransform.position = { ...newTransform.position, z: newTransform.position.z - positionStep };
+          changed = true;
+          break;
+        case 'e':
+          event.preventDefault();
+          newTransform.position = { ...newTransform.position, z: newTransform.position.z + positionStep };
+          changed = true;
+          break;
+
+        // R/F: Rotation Z (Roll)
+        case 'r':
+          event.preventDefault();
+          newTransform.rotation = { ...newTransform.rotation, z: newTransform.rotation.z + rotationStep };
+          changed = true;
+          break;
+        case 'f':
+          event.preventDefault();
+          newTransform.rotation = { ...newTransform.rotation, z: newTransform.rotation.z - rotationStep };
+          changed = true;
+          break;
+
+        // Z/X: Uniform Scale (no upper limit)
+        case 'z':
+          event.preventDefault();
+          const scaleDown = Math.max(0.01, newTransform.scale.x - uniformScaleStep);
+          newTransform.scale = { x: scaleDown, y: scaleDown, z: scaleDown };
+          changed = true;
+          break;
+        case 'x':
+          event.preventDefault();
+          const scaleUp = newTransform.scale.x + uniformScaleStep; // No max limit
+          newTransform.scale = { x: scaleUp, y: scaleUp, z: scaleUp };
+          changed = true;
+          break;
+
+        // H: Toggle keyboard help
+        case 'h':
+          if (event.ctrlKey || event.metaKey) return; // Don't interfere with browser shortcuts
+          event.preventDefault();
+          setShowKeyboardHelp(prev => !prev);
+          break;
+      }
+
+      if (changed) {
+        handleTransformChange(selectedId, newTransform);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedToothData, toothTransforms]);
+
   return (
     <div className="relative w-full h-full">
       <div ref={mountRef} className="w-full h-full" />
+      
+      <ToothModelGuide />
+      
       <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded-lg font-mono text-sm">
         <div className="text-xs text-gray-300 mb-1">Camera Position:</div>
         <div>X: {cameraPosition.x}</div>
         <div>Y: {cameraPosition.y}</div>
         <div>Z: {cameraPosition.z}</div>
       </div>
+
+      {/* Keyboard Help Toggle Button */}
+      {selectedToothData && (
+        <button
+          onClick={() => setShowKeyboardHelp(!showKeyboardHelp)}
+          className="absolute bottom-4 right-4 bg-blue-600/90 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-semibold shadow-lg transition-colors"
+          title="Press H to toggle"
+        >
+          ⌨️ {showKeyboardHelp ? 'Hide' : 'Show'} Keyboard Controls
+        </button>
+      )}
+
+      {/* Keyboard Controls Help Overlay */}
+      {showKeyboardHelp && selectedToothData && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-900/95 border border-gray-700 rounded-lg shadow-2xl p-6 z-50 max-w-md">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-white font-bold text-lg">⌨️ Keyboard Controls</h3>
+            <button
+              onClick={() => setShowKeyboardHelp(false)}
+              className="text-gray-400 hover:text-white text-2xl leading-none"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="space-y-4 text-sm">
+            <div>
+              <h4 className="text-green-400 font-semibold mb-2">📍 Position (WASD + Q/E)</h4>
+              <div className="grid grid-cols-2 gap-2 text-gray-300">
+                <div>W / S</div><div>Move Up / Down (Y)</div>
+                <div>A / D</div><div>Move Left / Right (X)</div>
+                <div>Q / E</div><div>Move Forward / Back (Z)</div>
+                <div className="col-span-2 text-gray-400 italic text-xs mt-1">
+                  ♾️ Unlimited range - move anywhere!
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-blue-400 font-semibold mb-2">🔄 Rotation (Arrow Keys + R/F)</h4>
+              <div className="grid grid-cols-2 gap-2 text-gray-300">
+                <div>↑ / ↓</div><div>Pitch (X rotation)</div>
+                <div>← / →</div><div>Yaw (Y rotation)</div>
+                <div>R / F</div><div>Roll (Z rotation)</div>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-yellow-400 font-semibold mb-2">📏 Scale (Z/X)</h4>
+              <div className="grid grid-cols-2 gap-2 text-gray-300">
+                <div>Z / X</div><div>Uniform Scale Down / Up</div>
+                <div className="col-span-2 text-gray-400 italic text-xs mt-1">
+                  ♾️ No upper limit - scale as big as you want!
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-gray-700 text-xs text-gray-400 italic">
+              <div>• Press H to toggle this help</div>
+              <div>• Select a tooth first to use controls</div>
+              <div>• Changes apply in real-time</div>
+              <div>• Don't forget to Save in the panel!</div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {showTransformControls && controlsToothId && (
+        <ToothTransformControls
+          toothId={controlsToothId}
+          toothName={getToothModelConfig(controlsToothId)?.name || `Tooth #${controlsToothId}`}
+          onTransformChange={handleTransformChange}
+          onClose={() => {
+            setShowTransformControls(false);
+            setControlsToothId(null);
+          }}
+        />
+      )}
     </div>
   );
 };
