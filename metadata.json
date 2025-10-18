@@ -1,0 +1,6 @@
+{
+  "name": "Agentic Periodontal Digital Twin",
+  "description": "A 3D, interactive digital twin for periodontal charting. Visualizes data like pocket depth, bleeding, and risk scores in real-time on a dynamic 3D model, featuring agentic calculations for CAL and prognostic analysis.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
