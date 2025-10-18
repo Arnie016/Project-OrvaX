@@ -5,6 +5,8 @@ import { INITIAL_CHART_DATA } from './constants.ts';
 import DentalChart3D from './components/PerioChart.tsx';
 import { InfoPanel } from './components/Tooth.tsx';
 import Toolbar from './components/Toolbar.tsx';
+import TextWindow from './components/TextWindow.tsx';
+import { ToothModelGuide } from './components/ToothModelGuide.tsx';
 
 // A custom hook to manage chart data logic, defined in-file to avoid adding new files.
 const useChartData = () => {
@@ -108,7 +110,10 @@ function App() {
   const [selectedToothId, setSelectedToothId] = useState<number | null>(3);
   const [activeSurface, setActiveSurface] = useState<'buccal' | 'lingual' | null>('buccal');
   const [showPlaque, setShowPlaque] = useState(false);
+  const [showTextWindow, setShowTextWindow] = useState(false);
+  const [showHelpWindow, setShowHelpWindow] = useState(false);
   const [cameraControls, setCameraControls] = useState<any>(null);
+  const [ttsText, setTtsText] = useState<string>('');
 
   const selectedToothData = useMemo(() => {
     return chartData.find(t => t.id === selectedToothId) || null;
@@ -140,6 +145,14 @@ function App() {
     setShowPlaque(prev => !prev);
   }, []);
 
+  const handleToggleTextWindow = useCallback(() => {
+    setShowTextWindow(prev => !prev);
+  }, []);
+
+  const handleHelp = useCallback(() => {
+    setShowHelpWindow(prev => !prev);
+  }, []);
+
   return (
     <div className="w-screen h-screen font-sans">
        <header className="absolute top-0 left-0 w-full p-4 z-20 flex justify-between items-center pointer-events-none">
@@ -148,7 +161,14 @@ function App() {
           <p className="text-md text-slate-300 drop-shadow-md">Interactive 3D Assessment Tool</p>
         </div>
         <div className="pointer-events-auto">
-          <Toolbar onResetCamera={handleResetCamera} onTogglePlaque={handleTogglePlaque} isPlaqueVisible={showPlaque} />
+          <Toolbar 
+            onResetCamera={handleResetCamera} 
+            onTogglePlaque={handleTogglePlaque} 
+            isPlaqueVisible={showPlaque}
+            onToggleTextWindow={handleToggleTextWindow}
+            isTextWindowVisible={showTextWindow}
+            onHelp={handleHelp}
+          />
         </div>
       </header>
       
@@ -173,6 +193,18 @@ function App() {
           overallScores={overallScores}
         />
       )}
+
+      <TextWindow 
+        isVisible={showTextWindow} 
+        onClose={() => setShowTextWindow(false)}
+        selectedToothId={selectedToothId}
+        onTextUpdate={setTtsText}
+      />
+
+      <ToothModelGuide 
+        isVisible={showHelpWindow}
+        onClose={() => setShowHelpWindow(false)}
+      />
 
       <footer className="absolute bottom-0 left-0 p-2 text-slate-400 text-xs z-10">
         <p>Not for clinical use. All data is for demonstration purposes only.</p>
