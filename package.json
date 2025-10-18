@@ -9,11 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/genai": "latest",
+    "gsap": "3.12.5",
+    "node-fetch": "^3.3.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "three": "^0.178.0",
-    "gsap": "3.12.5",
-    "@google/genai": "latest" 
+    "three": "^0.178.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

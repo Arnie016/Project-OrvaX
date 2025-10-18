@@ -368,9 +368,51 @@ Measurements:
 
   return (
     <>
-      <aside className="absolute top-24 right-4 bg-[rgba(25,30,45,0.6)] backdrop-blur-xl border border-[rgba(255,255,255,0.1)] rounded-2xl shadow-2xl p-4 text-white w-[420px] z-30 flex flex-col gap-4 max-h-[calc(100vh-12rem)] overflow-y-auto">
-        <header className="flex justify-between items-start">
-          <div>
+      <aside 
+        className="absolute top-24 right-4 bg-[rgba(25,30,45,0.6)] backdrop-blur-xl border border-[rgba(255,255,255,0.1)] rounded-2xl shadow-2xl p-4 text-white w-[420px] z-30 flex flex-col gap-4 max-h-[calc(100vh-12rem)] overflow-y-auto cursor-move select-none"
+        style={{ 
+          top: '114px', // Dokładna odległość: header (~100px) + 14px odstępu
+          minWidth: '300px',
+          minHeight: '200px',
+          maxWidth: '80vw',
+          maxHeight: '80vh'
+        }}
+        onMouseDown={(e) => {
+          // Sprawdź czy kliknięto w drag handle lub w puste miejsce
+          const target = e.target as HTMLElement;
+          if (target.closest('.drag-handle') || target === e.currentTarget) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const startLeft = rect.left;
+            const startTop = rect.top;
+            
+            const handleMouseMove = (moveEvent: MouseEvent) => {
+              const deltaX = moveEvent.clientX - startX;
+              const deltaY = moveEvent.clientY - startY;
+              const newLeft = Math.max(0, Math.min(window.innerWidth - rect.width, startLeft + deltaX));
+              const newTop = Math.max(20, Math.min(window.innerHeight - rect.height, startTop + deltaY));
+              
+              e.currentTarget.style.left = `${newLeft}px`;
+              e.currentTarget.style.top = `${newTop}px`;
+              e.currentTarget.style.right = 'auto';
+            };
+            
+            const handleMouseUp = () => {
+              document.removeEventListener('mousemove', handleMouseMove);
+              document.removeEventListener('mouseup', handleMouseUp);
+            };
+            
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+          }
+        }}
+      >
+        <header className="flex justify-between items-start drag-handle cursor-move">
+          <div className="flex-1">
             <h2 className="text-2xl font-bold">{toothDisplayName}</h2>
             <div className="flex items-center gap-4 mt-2">
               <div className="flex items-center gap-2">
@@ -381,39 +423,11 @@ Measurements:
                   <span className="text-red-300">BOP: {overallScores.bopPercentage.toFixed(0)}%</span>
                   <span className="text-yellow-300 ml-3">Plaque: {overallScores.plaquePercentage.toFixed(0)}%</span>
                </div>
-               <button onClick={handleGenerateReport} disabled={isGeneratingReport} className="px-3 py-1 text-xs bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors" title="Generate AI Clinical Summary">
-                  {isGeneratingReport ? '...' : 'AI Summary'}
-              </button>
             </div>
           </div>
           <button onClick={onClose} className="text-2xl text-gray-400 hover:text-white leading-none flex-shrink-0">&times;</button>
         </header>
 
-        <section>
-          <h3 className="font-semibold text-lg text-blue-300 mb-2">Voice Command</h3>
-          <div className="relative">
-              <div className="absolute inset-0 p-2 pl-10 pr-2 pointer-events-none">
-                  <div className="font-mono whitespace-pre-wrap text-transparent">
-                      {highlightedResult ? (
-                          <span className={highlightedResult.isMatched ? 'text-green-300' : 'text-red-400'}>
-                              {highlightedResult.text}
-                          </span>
-                      ) : command}
-                  </div>
-              </div>
-              <textarea
-                  value={command}
-                  onChange={(e) => setCommand(e.target.value)}
-                  placeholder="e.g., buccal 1 7, then 5 4 5..."
-                  className="w-full h-20 p-2 pl-10 bg-gray-900 rounded-lg border border-gray-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-gray-500 resize-none text-transparent caret-white"
-              />
-              <div className={`absolute left-3 top-3 text-gray-400 ${isListening ? 'animate-pulse' : ''}`}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"></path></svg>
-              </div>
-          </div>
-        </section>
-        
-        <hr className="border-gray-700/50"/>
         
         {/* Tabbed Data Entry Section */}
         <section>
@@ -463,6 +477,46 @@ Measurements:
                 </div>
             </div>
         </section>
+        
+        {/* Icon on left edge */}
+        <div className="absolute bottom-0 left-0 flex items-center justify-center w-8 h-8">
+          <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+        </div>
+        
+        {/* Resize Handle */}
+        <div 
+          className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize opacity-50 hover:opacity-100 transition-opacity"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const target = e.currentTarget as HTMLElement;
+            const startWidth = target.parentElement!.offsetWidth;
+            const startHeight = target.parentElement!.offsetHeight;
+            
+            const handleMouseMove = (e: MouseEvent) => {
+              const deltaX = e.clientX - startX;
+              const deltaY = e.clientY - startY;
+              const target = e.currentTarget as HTMLElement;
+              const newWidth = Math.max(300, Math.min(window.innerWidth * 0.8, startWidth + deltaX));
+              const newHeight = Math.max(200, Math.min(window.innerHeight * 0.8, startHeight + deltaY));
+              
+              target.parentElement!.style.width = `${newWidth}px`;
+              target.parentElement!.style.height = `${newHeight}px`;
+            };
+            
+            const handleMouseUp = () => {
+              document.removeEventListener('mousemove', handleMouseMove);
+              document.removeEventListener('mouseup', handleMouseUp);
+            };
+            
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+          }}
+        >
+          <div className="w-full h-full bg-gray-500 rounded-br-2xl"></div>
+        </div>
       </aside>
 
       {isReportModalOpen && (

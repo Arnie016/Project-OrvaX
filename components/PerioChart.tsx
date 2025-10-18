@@ -59,15 +59,25 @@ const toothFragmentShader = `
   void main() {
     vec3 baseColor = vec3(0.98, 0.95, 0.88);
     vec3 riskColor = vec3(1.0, 0.2, 0.2);
-    vec3 bleedingColor = vec3(1.0, 0.05, 0.05); // Deep red for bleeding (not pink)
+    vec3 bleedingColor = vec3(1.0, 0.0, 0.0); // Very deep red for bleeding
     
     float riskFactor = smoothstep(0.0, 1.0, riskScore);
     vec3 finalColor = mix(baseColor, riskColor, riskFactor);
     
     // Add red tint based on bleeding intensity (0-100% of sites bleeding)
-    // More bleeding = redder tooth (up to 70% red tint for full bleeding)
+    // 2 BOP (33%) = moderate red, 3+ BOP (50%+) = very red tooth
     if (bleedingFactor > 0.0) {
-      float bleedingIntensity = bleedingFactor * 0.7; // 0% to 70% red tint
+      float bleedingIntensity;
+      if (bleedingFactor >= 0.5) {
+        // 3+ BOP sites = very intense red (90-100% red tint)
+        bleedingIntensity = 0.9 + (bleedingFactor - 0.5) * 0.2; // 90% to 100% red tint
+      } else if (bleedingFactor >= 0.33) {
+        // 2 BOP sites = moderate red (60-90% red tint)
+        bleedingIntensity = 0.6 + (bleedingFactor - 0.33) * 1.77; // 60% to 90% red tint
+      } else {
+        // 1 BOP site = light red (0-60% red tint)
+        bleedingIntensity = bleedingFactor * 1.8; // 0% to 60% red tint
+      }
       finalColor = mix(finalColor, bleedingColor, bleedingIntensity);
     }
 

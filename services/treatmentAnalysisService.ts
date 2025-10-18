@@ -1,5 +1,6 @@
 import { PRIMEINTELLECT_CONFIG, createPrimeIntellectClient } from '../config/supabase';
 import { localToothStorage, ToothAnalysisData } from './localToothStorage';
+import { externalAIService } from './externalAIService';
 
 export interface TreatmentAnalysisData {
   id: string;
@@ -25,6 +26,7 @@ export interface PredictionData {
 
 class TreatmentAnalysisService {
   private primeIntellect = createPrimeIntellectClient();
+  private externalAI = externalAIService;
 
   /**
    * Generate treatment analysis using PrimeIntellect.ai with local data
@@ -66,56 +68,12 @@ class TreatmentAnalysisService {
         }
       }
 
-      const messages = [
-        {
-          role: 'system',
-          content: `You are a dental AI assistant specializing in periodontal treatment analysis. 
-          Analyze the provided tooth data and generate comprehensive treatment recommendations.
-          
-          Your response should be a JSON object with the following structure:
-          {
-            "analysis": "Detailed analysis of the tooth condition",
-            "prediction": "Treatment diagnosis and recommendations",
-            "confidence": 0.85,
-            "predictions": [
-              {
-                "type": "success_probability",
-                "text": "Success probability analysis",
-                "confidence": 0.85
-              },
-              {
-                "type": "complications", 
-                "text": "Potential complications analysis",
-                "confidence": 0.78
-              },
-              {
-                "type": "timeline",
-                "text": "Treatment timeline expectations",
-                "confidence": 0.82
-              },
-              {
-                "type": "recommendations",
-                "text": "Specific treatment recommendations",
-                "confidence": 0.90
-              }
-            ]
-          }`
-        },
-        {
-          role: 'user',
-          content: `Please analyze tooth ${toothId} for periodontal treatment. Current measurements: ${JSON.stringify(measurements)}`
-        }
-      ];
-
-      const response = await this.primeIntellect.chat.completions.create(messages, {
-        model: PRIMEINTELLECT_CONFIG.model,
-        max_tokens: PRIMEINTELLECT_CONFIG.maxTokens,
-        temperature: PRIMEINTELLECT_CONFIG.temperature
-      });
+      // Use external AI service instead of PrimeIntellect
+      const response = await this.externalAI.generateToothAnalysis(toothId, measurements);
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
-        throw new Error('No response content received from PrimeIntellect.ai');
+        throw new Error('No response content received from external AI service');
       }
 
       const analysisResult = JSON.parse(content);
@@ -228,56 +186,12 @@ class TreatmentAnalysisService {
           console.log('🔄 Chart data changed - generating new overall analysis');
         }
       }
-      const messages = [
-        {
-          role: 'system',
-          content: `You are a dental AI assistant specializing in comprehensive oral health analysis. 
-          Analyze the provided complete dental chart data and generate overall oral health assessment.
-          
-          Your response should be a JSON object with the following structure:
-          {
-            "analysis": "Comprehensive analysis of overall oral health condition",
-            "prediction": "Overall treatment recommendations and prognosis",
-            "confidence": 0.85,
-            "predictions": [
-              {
-                "type": "overall_health",
-                "text": "Overall oral health assessment",
-                "confidence": 0.85
-              },
-              {
-                "type": "risk_factors", 
-                "text": "Identified risk factors and concerns",
-                "confidence": 0.78
-              },
-              {
-                "type": "treatment_priority",
-                "text": "Treatment priority and sequencing",
-                "confidence": 0.82
-              },
-              {
-                "type": "maintenance_plan",
-                "text": "Long-term maintenance recommendations",
-                "confidence": 0.90
-              }
-            ]
-          }`
-        },
-        {
-          role: 'user',
-          content: `Please analyze the overall oral health based on complete dental chart data: ${JSON.stringify(chartData)}`
-        }
-      ];
-
-      const response = await this.primeIntellect.chat.completions.create(messages, {
-        model: PRIMEINTELLECT_CONFIG.model,
-        max_tokens: PRIMEINTELLECT_CONFIG.maxTokens,
-        temperature: PRIMEINTELLECT_CONFIG.temperature
-      });
+      // Use external AI service instead of PrimeIntellect
+      const response = await this.externalAI.generateOverallAnalysis(chartData);
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
-        throw new Error('No response content received from PrimeIntellect.ai');
+        throw new Error('No response content received from external AI service');
       }
 
       const analysisResult = JSON.parse(content);

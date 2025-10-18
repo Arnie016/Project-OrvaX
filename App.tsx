@@ -9,6 +9,8 @@ import { fetchDbMeasurements, processDbMeasurements } from './dbDataSync.ts';
 import TextWindow from './components/TextWindow.tsx';
 import { ToothModelGuide } from './components/ToothModelGuide.tsx';
 import { localToothStorage } from './services/localToothStorage';
+import { aiModelManager } from './services/aiModelManager';
+import ModelStatusIndicator from './components/ModelStatusIndicator';
 
 // A custom hook to manage chart data logic, defined in-file to avoid adding new files.
 const useChartData = () => {
@@ -128,6 +130,22 @@ const useChartData = () => {
 
 function App() {
   const { chartData, updateChartData, overallScores } = useChartData();
+  
+  // Initialize AI model manager
+  useEffect(() => {
+    console.log('🚀 Initializing AI model manager...');
+    
+    // Preload the AI model for better performance
+    aiModelManager.preloadModel().then((success) => {
+      if (success) {
+        console.log('✅ AI model preloaded successfully');
+        // Warm up the model with a dummy request
+        aiModelManager.warmUpModel();
+      } else {
+        console.log('⚠️ AI model preload failed, using fallback mode');
+      }
+    });
+  }, []);
   const [selectedToothId, setSelectedToothId] = useState<number | null>(null);
   const [activeSurface, setActiveSurface] = useState<'buccal' | 'lingual' | null>('buccal');
   const [showPlaque, setShowPlaque] = useState(false);
@@ -240,6 +258,104 @@ function App() {
     setShowHelpWindow(prev => !prev);
   }, []);
 
+  // Centralny system zarządzania oknami - gdy voice chat się aktywuje, zamyka wszystkie okna
+  const closeAllWindows = useCallback(() => {
+    setShowTextWindow(false);
+    setShowHelpWindow(false);
+    setSelectedToothId(null);
+  }, []);
+
+  // Monitor ConvAI widget - zamyka okna gdy voice chat jest w pełni aktywny i gotowy do rozmowy
+  useEffect(() => {
+    let wasReady = false; // Śledzi poprzedni stan gotowości
+    
+    const checkConvAIStatus = () => {
+      const convaiWidget = document.querySelector('elevenlabs-convai');
+      if (convaiWidget) {
+        // Sprawdź czy ConvAI jest w pełni aktywny i gotowy do rozmowy
+        const isReadyForChat = 
+          // Sprawdź czy widget jest rozwinięty i widoczny (bardziej liberalne)
+          (convaiWidget.offsetHeight > 100 || convaiWidget.offsetWidth > 200) ||
+          // Sprawdź czy ma klasę aktywności
+          convaiWidget.classList.contains('active') ||
+          convaiWidget.classList.contains('open') ||
+          convaiWidget.classList.contains('expanded') ||
+          convaiWidget.classList.contains('ready') ||
+          // Sprawdź czy ma atrybut gotowości
+          convaiWidget.getAttribute('data-ready') === 'true' ||
+          convaiWidget.getAttribute('data-active') === 'true' ||
+          convaiWidget.getAttribute('data-open') === 'true' ||
+          // Sprawdź czy ma iframe (pełny interfejs)
+          convaiWidget.querySelector('iframe') ||
+          // Sprawdź czy ma modal lub dialog
+          convaiWidget.querySelector('[role="dialog"]') ||
+          convaiWidget.querySelector('.modal') ||
+          convaiWidget.querySelector('.overlay') ||
+          // Sprawdź czy ma przyciski voice chat
+          convaiWidget.querySelector('button[aria-label*="voice"]') ||
+          convaiWidget.querySelector('button[aria-label*="chat"]') ||
+          convaiWidget.querySelector('button[aria-label*="speak"]') ||
+          // Sprawdź czy ma wskaźniki gotowości
+          convaiWidget.querySelector('.ready') ||
+          convaiWidget.querySelector('.connected') ||
+          convaiWidget.querySelector('.initialized') ||
+          // Sprawdź czy ma jakiekolwiek przyciski (może być gotowy)
+          convaiWidget.querySelector('button') ||
+          // Sprawdź czy ma jakiekolwiek elementy interaktywne
+          convaiWidget.querySelector('input') ||
+          convaiWidget.querySelector('textarea') ||
+          // Sprawdź czy ma jakiekolwiek elementy z tekstem (może być załadowany)
+          convaiWidget.querySelector('div[class*="text"]') ||
+          convaiWidget.querySelector('span[class*="text"]');
+        
+        // Debug - loguj stan
+        if (isReadyForChat !== wasReady) {
+          console.log('🔍 ConvAI status changed:', {
+            isReadyForChat,
+            wasReady,
+            height: convaiWidget.offsetHeight,
+            width: convaiWidget.offsetWidth,
+            classes: Array.from(convaiWidget.classList),
+            attributes: Array.from(convaiWidget.attributes).map(attr => `${attr.name}="${attr.value}"`),
+            buttons: convaiWidget.querySelectorAll('button').length,
+            iframe: !!convaiWidget.querySelector('iframe')
+          });
+        }
+        
+        // Zamyka okna gdy ConvAI PRZECHODZI z niegotowego do gotowego
+        if (isReadyForChat && !wasReady) {
+          console.log('🎤 ConvAI voice chat ready - closing all windows before greeting');
+          closeAllWindows();
+        }
+        
+        wasReady = isReadyForChat;
+      }
+    };
+
+    // Sprawdzaj co 300ms dla szybszej reakcji
+    const interval = setInterval(checkConvAIStatus, 300);
+    
+    // Dodatkowo nasłuchuj na zmiany w DOM
+    const observer = new MutationObserver(() => {
+      checkConvAIStatus();
+    });
+    
+    // Obserwuj zmiany w ConvAI widget
+    const convaiWidget = document.querySelector('elevenlabs-convai');
+    if (convaiWidget) {
+      observer.observe(convaiWidget, {
+        attributes: true,
+        childList: true,
+        subtree: true
+      });
+    }
+    
+    return () => {
+      clearInterval(interval);
+      observer.disconnect();
+    };
+  }, [closeAllWindows]);
+
   const handleOverallAnalysis = useCallback(() => {
     // Clear selected tooth to trigger overall analysis
     setSelectedToothId(null);
@@ -252,6 +368,9 @@ function App() {
         <div className="bg-[rgba(25,30,45,0.6)] backdrop-blur-md border border-[rgba(255,255,255,0.1)] p-3 rounded-xl">
           <h1 className="text-2xl font-bold text-white drop-shadow-md">Agentic Periodontal Digital Twin</h1>
           <p className="text-md text-slate-300 drop-shadow-md">Interactive 3D Assessment Tool</p>
+          <div className="mt-2">
+            <ModelStatusIndicator />
+          </div>
         </div>
         <div className="pointer-events-auto">
           <Toolbar 
@@ -301,6 +420,7 @@ function App() {
         isVisible={showHelpWindow}
         onClose={() => setShowHelpWindow(false)}
       />
+
 
       <footer className="absolute bottom-0 left-0 p-2 text-slate-400 text-xs z-10">
         <p>Not for clinical use. All data is for demonstration purposes only.</p>

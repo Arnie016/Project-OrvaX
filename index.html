@@ -28,6 +28,17 @@
     right: 20px !important;
     z-index: 9999 !important;
   }
+  
+  /* Jeśli to jest przycisk w ConvAI widget */
+  elevenlabs-convai button,
+  elevenlabs-convai [class*="h-9"],
+  elevenlabs-convai [class*="min-w-9"] {
+    height: 4rem !important; /* Zwiększa wysokość z h-9 (2.25rem) do 4rem */
+    min-height: 4rem !important;
+    width: 4rem !important; /* Zwiększa szerokość */
+    min-width: 4rem !important;
+    font-size: 1.2rem !important; /* Zwiększa rozmiar tekstu */
+  }
 </style>
 </head>
   <body class="bg-[#10141C] text-slate-100">
