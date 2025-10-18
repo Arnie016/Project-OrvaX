@@ -13,6 +13,7 @@ import {
   ToothTransform, 
   getDefaultTransform,
   loadToothTransforms,
+  loadToothTransformsFromFile,
   saveToothTransforms
 } from '../toothModelMapping.ts';
 
@@ -381,12 +382,8 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
     setCameraControls(controls);
     controlsRef.current = controls;
 
-    // Load saved transformations
-    const savedTransforms = loadToothTransforms();
-    setToothTransforms(savedTransforms);
-
     // Function to load a tooth model from GLB
-    const loadToothModel = (toothData: ToothData) => {
+    const loadToothModel = (toothData: ToothData, transforms: { [toothId: number]: ToothTransform }) => {
       if (toothData.isMissing) return;
       
       const modelConfig = getToothModelConfig(toothData.id);
@@ -397,7 +394,7 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
 
       const position = TOOTH_POSITIONS[toothData.id];
       const risk = (toothData.riskScore || 0) / 50;
-      const toothTransform = savedTransforms[toothData.id] || getDefaultTransform();
+      const toothTransform = transforms[toothData.id] || getDefaultTransform();
 
       // Create a wrapper group for the tooth
       const toothGroup = new THREE.Group();
@@ -506,8 +503,26 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
       toothMeshesRef.current[toothData.id] = toothGroup;
     };
 
-    // Load all teeth
-    chartData.forEach(loadToothModel);
+    // Load transforms and then load all teeth
+    const initializeTeeth = async () => {
+      // Try to load from teethv2.json first
+      let transforms = await loadToothTransformsFromFile('teethv2.json');
+      
+      if (Object.keys(transforms).length > 0) {
+        console.log('✅ Loaded transforms from teethv2.json:', Object.keys(transforms).length, 'teeth');
+      } else {
+        // Fallback to localStorage
+        transforms = loadToothTransforms();
+        console.log('⚠️ Using localStorage transforms:', Object.keys(transforms).length, 'teeth');
+      }
+      
+      setToothTransforms(transforms);
+      
+      // Load all teeth with the transforms
+      chartData.forEach((toothData) => loadToothModel(toothData, transforms));
+    };
+    
+    initializeTeeth();
 
     const createGumArchFromTeeth = (
         allToothData: ToothData[], 

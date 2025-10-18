@@ -76,6 +76,40 @@ export const getDefaultTransform = (): ToothTransform => ({
   scale: { x: 0.1, y: 0.1, z: 0.1 }, // GLB models are often much larger, scale them down
 });
 
+// Load transformations from JSON file
+export const loadToothTransformsFromFile = async (filename: string = 'teethv2.json'): Promise<{ [toothId: number]: ToothTransform }> => {
+  try {
+    const filePath = `logs/${filename}`;
+    console.log(`🔄 Loading tooth transforms from: ${filePath}`);
+    
+    const response = await fetch(filePath);
+    if (!response.ok) {
+      console.warn(`❌ Could not load ${filePath} (status: ${response.status})`);
+      return {};
+    }
+    const data = await response.json();
+    
+    // Validate the data structure
+    const validTransforms: { [toothId: number]: ToothTransform } = {};
+    for (const [key, value] of Object.entries(data)) {
+      const toothId = parseInt(key);
+      const transform = value as any;
+      
+      if (transform.position && transform.rotation && transform.scale) {
+        validTransforms[toothId] = transform as ToothTransform;
+      } else {
+        console.warn(`⚠️ Invalid transform data for tooth ${toothId}, skipping`);
+      }
+    }
+    
+    console.log(`✅ Loaded ${Object.keys(validTransforms).length} valid tooth transforms from ${filePath}`);
+    return validTransforms;
+  } catch (error) {
+    console.warn('❌ Failed to load tooth transforms from file:', error);
+    return {};
+  }
+};
+
 // Load saved transformations from localStorage
 export const loadToothTransforms = (): { [toothId: number]: ToothTransform } => {
   try {
