@@ -25,3 +25,11 @@ Optional
 
 <img alt="Charting Sequence" src="./public/images/Charting%20Sequence.png" />
 
+## Voice + tools
+
+<img alt="ElevenLabs Tools" src="./public/images/ELEVANLABS.png" />
+
+## Automation flow (n8n)
+
+<img alt="n8n Flow" src="./public/images/N8N.png" />
+
