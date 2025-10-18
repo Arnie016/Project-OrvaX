@@ -1,5 +1,7 @@
 # 3D Tooth Models System
 
+![Intro](public/images/iNTRO.png)
+
 ## Overview
 
 This system replaces procedurally generated teeth with realistic 3D models loaded from .glb files. Each tooth can be individually transformed (positioned, rotated, scaled) with an intuitive UI, and transformations persist across sessions.
@@ -124,6 +126,12 @@ When you double-click a tooth, a control panel appears with:
 - **Reset**: Restore default transform values
 - **Save**: Persist current transforms to localStorage
 
+### Charting Sequence
+
+The standard chairside entry sequence used by the app's command parser and UI.
+
+![Charting Sequence](public/images/Charting%20Sequence.png)
+
 ## Technical Architecture
 
 ### File Structure
@@ -158,6 +166,12 @@ When you double-click a tooth, a control panel appears with:
 - Help overlay with usage instructions
 - Can be minimized to a "? Help" button
 
+### Voice + Webhook Tools (ElevenLabs → Tools)
+
+High-level view of the voice layer and the set of webhook tools that back clinical commands.
+
+![ElevenLabs Tools](public/images/ELEVANLABS.png)
+
 ### Mirroring Logic
 
 Right-side teeth are mirrored by flipping the X-axis scale:
@@ -166,6 +180,12 @@ if (modelConfig.shouldMirror) {
   model.scale.x *= -1;
 }
 ```
+
+### Automation Flow (n8n)
+
+Automation/orchestration pipeline that normalizes incoming voice intent and routes to the correct tool.
+
+![n8n Flow](public/images/N8N.png)
 
 This creates anatomically correct right-side teeth from left-side models.
 
