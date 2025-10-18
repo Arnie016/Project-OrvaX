@@ -1,20 +1,32 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+  <h1>Agentic Periodontal Digital Twin</h1>
+  <p>Interactive 3D perio charting with GLB tooth models, voice-driven entry, and automation.</p>
+  <img alt="Intro" src="public/images/iNTRO.png" />
 </div>
 
-# Run and deploy your AI Studio app
+## Quick Start
 
-This contains everything you need to run your app locally.
+1. Install deps: `npm install`
+2. Set `GEMINI_API_KEY` in a `.env.local` file (Vite will inject it)
+3. Start dev server: `npm run dev` and open the app
 
-View your app in AI Studio: https://ai.studio/apps/drive/17jQs2EkM9YQ3z2VwLOQ1Hlm8SzTIFf24
+Full 3D model guide and controls: see [TOOTH_MODELS_README.md](TOOTH_MODELS_README.md).
 
-## Run Locally
+## What’s Inside
 
-**Prerequisites:**  Node.js
+- 3D scene with Three.js (`components/PerioChart.tsx`)
+- Per-tooth transforms with persistence and UI (`components/ToothTransformControls.tsx`)
+- Tooth data entry and AI summary (`components/Tooth.tsx`)
+- Model mapping + mirroring (`toothModelMapping.ts`)
 
+## Charting Sequence
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+<img alt="Charting Sequence" src="public/images/Charting%20Sequence.png" />
+
+## Voice + Tools
+
+<img alt="ElevenLabs Tools" src="public/images/ELEVANLABS.png" />
+
+## Automation Flow (n8n)
+
+<img alt="n8n Flow" src="public/images/N8N.png" />
