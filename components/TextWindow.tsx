@@ -5,10 +5,12 @@ interface TextWindowProps {
   isVisible: boolean;
   onClose: () => void;
   selectedToothId?: number | null;
+  chartData?: any[];
   onTextUpdate?: (text: string) => void;
 }
 
-const TextWindow: React.FC<TextWindowProps> = ({ isVisible, onClose, selectedToothId, onTextUpdate }) => {
+const TextWindow: React.FC<TextWindowProps> = ({ isVisible, onClose, selectedToothId, chartData, onTextUpdate }) => {
+  console.log('🪟 TextWindow rendered with:', { isVisible, selectedToothId, chartDataLength: chartData?.length });
   const [position, setPosition] = useState({ x: 20, y: 20 });
   const [size, setSize] = useState({ width: 450, height: window.innerHeight - 20 });
   const [isDragging, setIsDragging] = useState(false);
@@ -26,6 +28,7 @@ const TextWindow: React.FC<TextWindowProps> = ({ isVisible, onClose, selectedToo
   
   // Cache for loaded data
   const [loadedToothId, setLoadedToothId] = useState<number | null>(null);
+  const [analysisType, setAnalysisType] = useState<'tooth' | 'overall' | null>(null);
   
   const windowRef = useRef<HTMLDivElement>(null);
 
@@ -93,14 +96,29 @@ const TextWindow: React.FC<TextWindowProps> = ({ isVisible, onClose, selectedToo
     }
   }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
 
-  // Fetch data when tooth is selected
+  // Fetch data when tooth is selected or overall analysis is triggered
   useEffect(() => {
+    console.log('🔄 TextWindow useEffect triggered:', { selectedToothId, loadedToothId, chartDataLength: chartData?.length });
+    
     if (selectedToothId && selectedToothId !== loadedToothId) {
+      // Tooth-specific analysis
+      console.log('🦷 Starting tooth analysis for:', selectedToothId);
       setIsLoading(true);
       setError(null);
+      setAnalysisType('tooth');
       
-      treatmentAnalysisService.generateAnalysis(selectedToothId)
+      // Get current tooth data for analysis
+      const currentTooth = chartData?.find(t => t.id === selectedToothId);
+      const toothMeasurements = currentTooth?.measurements || {};
+      
+      console.log('🔍 TextWindow - Generating analysis for tooth:', selectedToothId);
+      console.log('📊 TextWindow - Current tooth data:', currentTooth);
+      console.log('📊 TextWindow - Tooth measurements:', toothMeasurements);
+      
+      treatmentAnalysisService.generateAnalysis(selectedToothId, toothMeasurements)
         .then(data => {
+          // Store original measurements for comparison
+          data.originalMeasurements = toothMeasurements;
           setAnalysisData(data);
           setLoadedToothId(selectedToothId);
           
@@ -114,8 +132,65 @@ const TextWindow: React.FC<TextWindowProps> = ({ isVisible, onClose, selectedToo
         .finally(() => {
           setIsLoading(false);
         });
+    } else if (selectedToothId === null && chartData && chartData.length > 0 && analysisType !== 'overall') {
+      // Overall analysis (when selectedToothId is explicitly null)
+      setIsLoading(true);
+      setError(null);
+      setAnalysisType('overall');
+      
+      treatmentAnalysisService.generateOverallAnalysis(chartData)
+        .then(data => {
+          setAnalysisData(data);
+          setLoadedToothId(0); // 0 indicates overall analysis
+          
+          // Update text for TTS
+          const fullText = `${data.analysis_text} ${data.prediction}`;
+          onTextUpdate?.(fullText);
+        })
+        .catch(err => {
+          setError(err.message);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     }
-  }, [selectedToothId, loadedToothId, onTextUpdate]);
+  }, [selectedToothId, chartData, loadedToothId, analysisType, onTextUpdate]);
+
+  // Auto-refresh analysis when chart data changes (after updates)
+  useEffect(() => {
+    console.log('🔄 TextWindow auto-refresh useEffect triggered:', { selectedToothId, analysisData: !!analysisData, chartDataLength: chartData?.length });
+    
+    if (selectedToothId && analysisData && chartData) {
+      // Find current tooth data
+      const currentTooth = chartData.find(t => t.id === selectedToothId);
+      console.log('🦷 Current tooth found:', currentTooth);
+      
+      if (currentTooth && analysisData.originalMeasurements) {
+        // Check if data has changed by comparing measurements
+        const hasDataChanged = JSON.stringify(currentTooth.measurements) !== 
+          JSON.stringify(analysisData.originalMeasurements);
+        
+        console.log('🔄 Data comparison:', {
+          hasDataChanged,
+          currentMeasurements: currentTooth.measurements,
+          originalMeasurements: analysisData.originalMeasurements
+        });
+        
+        if (hasDataChanged) {
+          console.log('🔄 Data changed, refreshing analysis...', {
+            toothId: selectedToothId,
+            oldData: analysisData.originalMeasurements,
+            newData: currentTooth.measurements
+          });
+          // Clear cache and reload
+          treatmentAnalysisService.clearCache(selectedToothId);
+          setLoadedToothId(null); // Force reload
+        } else {
+          console.log('📋 Data unchanged, keeping current analysis for tooth', selectedToothId);
+        }
+      }
+    }
+  }, [chartData, selectedToothId]); // Removed analysisData from dependencies to prevent infinite loop
 
   if (!isVisible) return null;
 
@@ -135,7 +210,9 @@ const TextWindow: React.FC<TextWindowProps> = ({ isVisible, onClose, selectedToo
       {/* Header with drag handle and close button */}
       <div className="drag-handle flex items-center justify-between p-2 border-b border-[rgba(255,255,255,0.1)] cursor-grab active:cursor-grabbing bg-[rgba(0,0,0,0.2)]">
         <div className="flex items-center space-x-2">
-          <h1 className="text-white font-semibold text-lg">Treatment Analysis Diagnosis</h1>
+          <h1 className="text-white font-semibold text-lg">
+            {selectedToothId ? 'Tooth Analysis' : 'Overall Oral Health Analysis'}
+          </h1>
         </div>
         <div className="flex items-center space-x-1">
           <button
@@ -175,7 +252,12 @@ const TextWindow: React.FC<TextWindowProps> = ({ isVisible, onClose, selectedToo
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
-                <p className="text-slate-300 text-sm">{treatmentAnalysisService.getLoadingMessage()}</p>
+                <p className="text-slate-300 text-sm">
+                  {selectedToothId 
+                    ? treatmentAnalysisService.getLoadingMessage() 
+                    : treatmentAnalysisService.getOverallLoadingMessage()
+                  }
+                </p>
               </div>
             </div>
           ) : error ? (
@@ -203,21 +285,40 @@ const TextWindow: React.FC<TextWindowProps> = ({ isVisible, onClose, selectedToo
               <div className="p-4 bg-[rgba(255,255,255,0.05)] rounded-lg border border-[rgba(255,255,255,0.1)] break-words max-w-full overflow-hidden">
                 <h4 className="text-white font-semibold mb-3 text-xl">Future Possible Problems</h4>
                 <div className="space-y-2 max-w-full">
-                  <div className="text-base break-words max-w-full overflow-hidden">
-                    <span className="text-red-400 capitalize text-base font-semibold">High Risk:</span>
-                    <p className="text-slate-300 mt-2 text-base leading-relaxed break-words hyphens-auto max-w-full text-justify">Progressive bone loss may lead to tooth mobility and potential tooth loss within 2-3 years if left untreated.</p>
-                    <span className="text-base text-red-400 font-medium">Risk Level: 85%</span>
-                  </div>
-                  <div className="text-base break-words max-w-full overflow-hidden">
-                    <span className="text-orange-400 capitalize text-base font-semibold">Medium Risk:</span>
-                    <p className="text-slate-300 mt-2 text-base leading-relaxed break-words hyphens-auto max-w-full text-justify">Continued inflammation may result in further attachment loss and increased pocket depths.</p>
-                    <span className="text-base text-orange-400 font-medium">Risk Level: 65%</span>
-                  </div>
-                  <div className="text-base break-words max-w-full overflow-hidden">
-                    <span className="text-yellow-400 capitalize text-base font-semibold">Low Risk:</span>
-                    <p className="text-slate-300 mt-2 text-base leading-relaxed break-words hyphens-auto max-w-full text-justify">With proper maintenance, the condition can be stabilized and further progression prevented.</p>
-                    <span className="text-base text-yellow-400 font-medium">Risk Level: 25%</span>
-                  </div>
+                  {analysisData.confidence_score > 0.8 ? (
+                    // Healthy tooth - show preventive risks
+                    <>
+                      <div className="text-base break-words max-w-full overflow-hidden">
+                        <span className="text-green-400 capitalize text-base font-semibold">Excellent Health:</span>
+                        <p className="text-slate-300 mt-2 text-base leading-relaxed break-words hyphens-auto max-w-full text-justify">Current excellent periodontal health. Continue preventive care to maintain this status.</p>
+                        <span className="text-base text-green-400 font-medium">Risk Level: 5%</span>
+                      </div>
+                      <div className="text-base break-words max-w-full overflow-hidden">
+                        <span className="text-yellow-400 capitalize text-base font-semibold">Preventive Care:</span>
+                        <p className="text-slate-300 mt-2 text-base leading-relaxed break-words hyphens-auto max-w-full text-justify">Maintain regular dental hygiene and checkups to prevent future issues.</p>
+                        <span className="text-base text-yellow-400 font-medium">Risk Level: 15%</span>
+                      </div>
+                    </>
+                  ) : (
+                    // Problematic tooth - show treatment risks
+                    <>
+                      <div className="text-base break-words max-w-full overflow-hidden">
+                        <span className="text-red-400 capitalize text-base font-semibold">High Risk:</span>
+                        <p className="text-slate-300 mt-2 text-base leading-relaxed break-words hyphens-auto max-w-full text-justify">Progressive bone loss may lead to tooth mobility and potential tooth loss within 2-3 years if left untreated.</p>
+                        <span className="text-base text-red-400 font-medium">Risk Level: 85%</span>
+                      </div>
+                      <div className="text-base break-words max-w-full overflow-hidden">
+                        <span className="text-orange-400 capitalize text-base font-semibold">Medium Risk:</span>
+                        <p className="text-slate-300 mt-2 text-base leading-relaxed break-words hyphens-auto max-w-full text-justify">Continued inflammation may result in further attachment loss and increased pocket depths.</p>
+                        <span className="text-base text-orange-400 font-medium">Risk Level: 65%</span>
+                      </div>
+                      <div className="text-base break-words max-w-full overflow-hidden">
+                        <span className="text-yellow-400 capitalize text-base font-semibold">Low Risk:</span>
+                        <p className="text-slate-300 mt-2 text-base leading-relaxed break-words hyphens-auto max-w-full text-justify">With proper maintenance, the condition can be stabilized and further progression prevented.</p>
+                        <span className="text-base text-yellow-400 font-medium">Risk Level: 25%</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
