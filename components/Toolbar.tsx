@@ -41,21 +41,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onResetCamera, onTogglePlaque, isPlaq
         </div>
       </button>
       
-      <button
-        onClick={onTogglePlaque}
-        className={`px-4 py-2.5 text-base font-normal rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-400 border shadow-lg hover:shadow-xl ${
-          isPlaqueVisible
-            ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-gray-900 border-yellow-400/50'
-            : 'bg-gradient-to-r from-slate-600 to-slate-700 text-white hover:from-slate-500 hover:to-slate-600 border-slate-500/30'
-        }`}
-        aria-pressed={isPlaqueVisible}
-      >
-        <div className="flex items-center space-x-2">
-          <div className={`w-2 h-2 rounded-full ${isPlaqueVisible ? 'bg-gray-700' : 'bg-yellow-400'}`}></div>
-          <span>{isPlaqueVisible ? 'Plaque On' : 'Plaque Off'}</span>
-        </div>
-      </button>
-      
+  
       <button
         onClick={onToggleTextWindow}
         className={`px-4 py-2.5 text-base font-normal rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-400 border shadow-lg hover:shadow-xl ${

@@ -13,9 +13,8 @@ import { localToothStorage } from './services/localToothStorage';
 // A custom hook to manage chart data logic, defined in-file to avoid adding new files.
 const useChartData = () => {
   const [data, setData] = useState<ToothData[]>(() => {
-    // Try to load from localStorage first
-    const savedData = localToothStorage.loadToothData();
-    return savedData || INITIAL_CHART_DATA;
+    // Always start with clean initial data - no localStorage loading
+    return INITIAL_CHART_DATA;
   });
 
   const calculateData = (tooth: ToothData): { cal: PerioSiteMeasurements, riskScore: number } => {
