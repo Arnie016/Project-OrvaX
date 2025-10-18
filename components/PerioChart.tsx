@@ -38,6 +38,7 @@ const toothVertexShader = `
 const toothFragmentShader = `
   uniform float riskScore;
   uniform bool isSelected;
+  uniform bool isHovered;
   uniform bool isDimmed;
   uniform bool showPlaque;
   uniform float activeSurfaceHighlight; // 0.0: none, 1.0: buccal, -1.0: lingual
@@ -68,6 +69,11 @@ const toothFragmentShader = `
     vec3 light = normalize(vec3(0.5, 0.5, 1.0));
     float diffuse = max(dot(vNormal, light), 0.3) * 0.7 + 0.4;
     gl_FragColor = vec4(finalColor * diffuse, 1.0);
+
+    if (isHovered && !isSelected) {
+      gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.7, 0.85, 1.0), 0.3);
+      gl_FragColor.rgb += vec3(0.05, 0.08, 0.1); // Add a subtle highlight
+    }
 
     if (isSelected) {
       gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.6, 0.8, 1.0), 0.5);
@@ -355,6 +361,7 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
   const [toothTransforms, setToothTransforms] = useState<{ [toothId: number]: ToothTransform }>({});
   const gltfLoaderRef = useRef<GLTFLoader>(new GLTFLoader());
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  const [hoveredTooth, setHoveredTooth] = useState<{ id: number; x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -415,6 +422,7 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
                 uniforms: {
                   riskScore: { value: risk },
                   isSelected: { value: false },
+                  isHovered: { value: false },
                   isDimmed: { value: false },
                   showPlaque: { value: showPlaque },
                   activeSurfaceHighlight: { value: 0.0 },
@@ -469,6 +477,7 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
             uniforms: {
               riskScore: { value: risk },
               isSelected: { value: false },
+              isHovered: { value: false },
               isDimmed: { value: false },
               showPlaque: { value: showPlaque },
               activeSurfaceHighlight: { value: 0.0 },
@@ -551,9 +560,9 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
         
         // Add extended points
         const extendedPoints = [
-            firstPoint.clone().add(firstDir.clone().multiplyScalar(1.5)), // Extend backward
+            firstPoint.clone().add(firstDir.clone().multiplyScalar(1)), // Extend backward (shorter)
             ...toothPoints,
-            lastPoint.clone().add(lastDir.clone().multiplyScalar(1.5))    // Extend forward
+            lastPoint.clone().add(lastDir.clone().multiplyScalar(1))    // Extend forward (shorter)
         ];
     
         const curve = new THREE.CatmullRomCurve3(extendedPoints, false, 'catmullrom', 0.5);
@@ -572,6 +581,7 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
 
         const gumMesh = new THREE.Mesh(gumGeometry, gumMaterial);
         gumMesh.position.y = yPos;
+        gumMesh.scale.y = 2.5; // Scale the gum vertically to make it taller
         gumMeshesRef.current.push(gumMesh);
         return gumMesh;
     };
@@ -579,10 +589,10 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
     const upperArchIdOrder = Array.from({length: 16}, (_, i) => 16 - i);
     const lowerArchIdOrder = Array.from({length: 16}, (_, i) => 17 + i);
     
-    const upperGum = createGumArchFromTeeth(chartData, upperArchIdOrder, 0.4, 2.5);
+    const upperGum = createGumArchFromTeeth(chartData, upperArchIdOrder, 0.6, 4.1);
     if(upperGum) scene.add(upperGum);
 
-    const lowerGum = createGumArchFromTeeth(chartData, lowerArchIdOrder, 0.3, -1.8);
+    const lowerGum = createGumArchFromTeeth(chartData, lowerArchIdOrder, 0.5, -2);
     if(lowerGum) scene.add(lowerGum);
 
 
@@ -609,6 +619,36 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
     const mouse = new THREE.Vector2();
     let clickTimeout: NodeJS.Timeout | null = null;
     let clickCount = 0;
+    
+    // Helper function to get quadrant from tooth ID
+    const getQuadrant = (toothId: number): string => {
+      if (toothId >= 1 && toothId <= 8) return 'Upper Right (Q1)';
+      if (toothId >= 9 && toothId <= 16) return 'Upper Left (Q2)';
+      if (toothId >= 17 && toothId <= 24) return 'Lower Left (Q3)';
+      if (toothId >= 25 && toothId <= 32) return 'Lower Right (Q4)';
+      return 'Unknown';
+    };
+    
+    const handleMouseMove = (event: MouseEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      
+      for (const intersect of intersects) {
+        if (intersect.object.userData.type === 'tooth' || intersect.object.userData.id) {
+          const toothId = intersect.object.userData.id;
+          setHoveredTooth({ 
+            id: toothId, 
+            x: event.clientX, 
+            y: event.clientY 
+          });
+          return;
+        }
+      }
+      setHoveredTooth(null);
+    };
     
     const handleClick = (event: MouseEvent) => {
         const rect = renderer.domElement.getBoundingClientRect();
@@ -648,12 +688,14 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
     };
     
     currentMount.addEventListener('click', handleClick);
+    currentMount.addEventListener('mousemove', handleMouseMove);
 
     return () => {
       if (clickTimeout) {
         clearTimeout(clickTimeout);
       }
       currentMount.removeEventListener('click', handleClick);
+      currentMount.removeEventListener('mousemove', handleMouseMove);
       currentMount.removeChild(renderer.domElement);
     };
   }, []);
@@ -666,12 +708,14 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
     Object.keys(toothMeshesRef.current).forEach((id) => {
         const group = toothMeshesRef.current[Number(id)];
         const isCurrentlySelected = Number(id) === selectedId;
+        const isCurrentlyHovered = hoveredTooth?.id === Number(id);
         
         // Update materials for all meshes in the group
         if (group) {
           group.traverse((child) => {
             if (child instanceof THREE.Mesh && child.material instanceof THREE.ShaderMaterial) {
               child.material.uniforms.isSelected.value = isCurrentlySelected;
+              child.material.uniforms.isHovered.value = isCurrentlyHovered;
               child.material.uniforms.isDimmed.value = selectedId != null && !isCurrentlySelected;
 
               if (isCurrentlySelected) {
@@ -718,7 +762,7 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
             material.uniforms.bopStates.value = [false, false, false, false, false, false];
         });
     }
-  }, [selectedToothData, activeSurface, shouldMoveCamera]);
+  }, [selectedToothData, activeSurface, shouldMoveCamera, hoveredTooth]);
   
   useEffect(() => {
     chartData.forEach(toothData => {
@@ -893,6 +937,35 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
       <div ref={mountRef} className="w-full h-full" />
       
       <ToothModelGuide />
+      
+      {/* Tooth Hover Tooltip */}
+      {hoveredTooth && (
+        <div 
+          className="absolute bg-gray-900/95 text-white px-4 py-2 rounded-lg shadow-lg pointer-events-none z-50 border border-gray-700"
+          style={{
+            left: `${hoveredTooth.x + 15}px`,
+            top: `${hoveredTooth.y + 15}px`,
+          }}
+        >
+          <div className="font-semibold text-blue-400">
+            {(() => {
+              const id = hoveredTooth.id;
+              if (id >= 1 && id <= 8) return `Q1-${9 - id} (Universal #${id})`;
+              if (id >= 9 && id <= 16) return `Q2-${id - 8} (Universal #${id})`;
+              if (id >= 17 && id <= 24) return `Q3-${25 - id} (Universal #${id})`;
+              if (id >= 25 && id <= 32) return `Q4-${id - 24} (Universal #${id})`;
+              return `Tooth #${id}`;
+            })()}
+          </div>
+          <div className="text-sm text-gray-300">{
+            hoveredTooth.id >= 1 && hoveredTooth.id <= 8 ? 'Upper Right' :
+            hoveredTooth.id >= 9 && hoveredTooth.id <= 16 ? 'Upper Left' :
+            hoveredTooth.id >= 17 && hoveredTooth.id <= 24 ? 'Lower Left' :
+            hoveredTooth.id >= 25 && hoveredTooth.id <= 32 ? 'Lower Right' :
+            'Unknown'
+          }</div>
+        </div>
+      )}
       
       <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded-lg font-mono text-sm">
         <div className="text-xs text-gray-300 mb-1">Camera Position:</div>
