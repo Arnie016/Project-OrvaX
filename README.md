@@ -1,32 +1,27 @@
-<div align="center">
-  <h1>Agentic Periodontal Digital Twin</h1>
-  <p>Interactive 3D perio charting with GLB tooth models, voice-driven entry, and automation.</p>
-  <img alt="Intro" src="public/images/iNTRO.png" />
-</div>
+# Agentic Periodontal Digital Twin
 
-## Quick Start
+<img alt="Intro" src="./public/images/iNTRO.png" />
 
-1. Install deps: `npm install`
-2. Set `GEMINI_API_KEY` in a `.env.local` file (Vite will inject it)
-3. Start dev server: `npm run dev` and open the app
+## Run locally
 
-Full 3D model guide and controls: see [TOOTH_MODELS_README.md](TOOTH_MODELS_README.md).
+- Install: `npm install`
+- Start: `npm run dev` → open http://localhost:3000
 
-## What’s Inside
+Optional
+- AI Summary: create `.env.local` with `GEMINI_API_KEY=...`
+- Chat endpoint: add `LLM_ENDPOINT=your_url` (defaults to `http://216.81.248.15:8000/generate`)
 
-- 3D scene with Three.js (`components/PerioChart.tsx`)
-- Per-tooth transforms with persistence and UI (`components/ToothTransformControls.tsx`)
-- Tooth data entry and AI summary (`components/Tooth.tsx`)
-- Model mapping + mirroring (`toothModelMapping.ts`)
+## Use
 
-## Charting Sequence
+- Single-click tooth to select, double-click to zoom
+- “AI Summary” for a clinical note; “Chat” to ask questions about the selected tooth
+- Transform panel: move/rotate/scale → Save to persist (localStorage)
 
-<img alt="Charting Sequence" src="public/images/Charting%20Sequence.png" />
+## Models (optional)
 
-## Voice + Tools
+- Put .glb files in `public/` (falls back to procedural teeth if missing)
 
-<img alt="ElevenLabs Tools" src="public/images/ELEVANLABS.png" />
+## Charting sequence
 
-## Automation Flow (n8n)
+<img alt="Charting Sequence" src="./public/images/Charting%20Sequence.png" />
 
-<img alt="n8n Flow" src="public/images/N8N.png" />
