@@ -42,6 +42,9 @@ const toothFragmentShader = `
   uniform bool isDimmed;
   uniform bool showPlaque;
   uniform float activeSurfaceHighlight; // 0.0: none, 1.0: buccal, -1.0: lingual
+  uniform float time; // For blink animation
+  uniform bool isBlinking;
+  uniform float bleedingFactor; // 0.0 to 1.0 based on number of bleeding sites
 
   varying vec3 vNormal;
   varying vec2 vUv;
@@ -56,9 +59,17 @@ const toothFragmentShader = `
   void main() {
     vec3 baseColor = vec3(0.98, 0.95, 0.88);
     vec3 riskColor = vec3(1.0, 0.2, 0.2);
+    vec3 bleedingColor = vec3(1.0, 0.05, 0.05); // Deep red for bleeding (not pink)
     
     float riskFactor = smoothstep(0.0, 1.0, riskScore);
     vec3 finalColor = mix(baseColor, riskColor, riskFactor);
+    
+    // Add red tint based on bleeding intensity (0-100% of sites bleeding)
+    // More bleeding = redder tooth (up to 70% red tint for full bleeding)
+    if (bleedingFactor > 0.0) {
+      float bleedingIntensity = bleedingFactor * 0.7; // 0% to 70% red tint
+      finalColor = mix(finalColor, bleedingColor, bleedingIntensity);
+    }
 
     if (showPlaque && riskScore > 0.1) {
        float plaqueNoise = noise(vUv * 20.0) * noise(vUv * 5.0);
@@ -93,6 +104,16 @@ const toothFragmentShader = `
         
         gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0, 1.0, 0.0), highlightFactor * 0.7);
       }
+    }
+    
+    // Blink effect for updated teeth
+    if (isBlinking) {
+      // Create a pulsating effect: 2 complete blinks (on-off-on-off)
+      // Frequency of 10 Hz means full cycle in 0.1s, so 2 blinks = 0.2s
+      float blinkFreq = 10.0; // 10 Hz for fast blinks
+      float blinkWave = abs(sin(time * blinkFreq * 3.14159)); // 0 to 1
+      vec3 blinkColor = vec3(0.3, 0.8, 1.0); // Bright cyan/blue
+      gl_FragColor.rgb = mix(gl_FragColor.rgb, blinkColor, blinkWave * 0.7);
     }
     
     if (isDimmed) {
@@ -345,9 +366,10 @@ interface DentalChart3DProps {
   showPlaque: boolean;
   setCameraControls: (controls: OrbitControls) => void;
   activeSurface: 'buccal' | 'lingual' | null;
+  blinkingTeeth: Set<number>;
 }
 
-const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothData, onToothSelect, showPlaque, setCameraControls, activeSurface }) => {
+const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothData, onToothSelect, showPlaque, setCameraControls, activeSurface, blinkingTeeth }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const toothMeshesRef = useRef<{ [id: number]: THREE.Group }>({});
   const gumMeshesRef = useRef<THREE.Mesh[]>([]);
@@ -427,6 +449,9 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
                   isDimmed: { value: false },
                   showPlaque: { value: showPlaque },
                   activeSurfaceHighlight: { value: 0.0 },
+                  time: { value: 0 },
+                  isBlinking: { value: false },
+                  bleedingFactor: { value: 0.0 },
                 },
                 transparent: true
               });
@@ -482,6 +507,9 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
               isDimmed: { value: false },
               showPlaque: { value: showPlaque },
               activeSurfaceHighlight: { value: 0.0 },
+              time: { value: 0 },
+              isBlinking: { value: false },
+              bleedingFactor: { value: 0.0 },
             },
             transparent: true
           });
@@ -609,9 +637,25 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
         z: Math.round(camera.position.z * 100) / 100
       });
       
+      const currentTime = clock.getElapsedTime();
+      
+      // Update gum time uniforms
       gumMeshesRef.current.forEach(gum => {
-        (gum.material as THREE.ShaderMaterial).uniforms.time.value = clock.getElapsedTime();
+        (gum.material as THREE.ShaderMaterial).uniforms.time.value = currentTime;
       });
+      
+      // Update tooth time uniforms and blinking state
+      Object.values(toothMeshesRef.current).forEach((toothGroup: THREE.Group) => {
+        toothGroup.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.material instanceof THREE.ShaderMaterial) {
+            const material = child.material as THREE.ShaderMaterial;
+            if (material.uniforms.time) {
+              material.uniforms.time.value = currentTime;
+            }
+          }
+        });
+      });
+      
       renderer.render(scene, camera);
     };
     animate();
@@ -776,17 +820,42 @@ const DentalChart3D: React.FC<DentalChart3DProps> = ({ chartData, selectedToothD
     chartData.forEach(toothData => {
         const group = toothMeshesRef.current[toothData.id];
         if (group) {
+            // Calculate bleeding intensity based on number of bleeding sites
+            const bleedingData = toothData.measurements[MeasurementType.BLEEDING] || {};
+            const bleedingSites = Object.values(bleedingData).filter(value => value === true).length;
+            const totalSites = 6; // 6 sites per tooth
+            const bleedingFactor = bleedingSites / totalSites; // 0.0 to 1.0
+            
             group.traverse((child) => {
               if (child instanceof THREE.Mesh && child.material instanceof THREE.ShaderMaterial) {
                 if(child.material.uniforms) {
                   child.material.uniforms.riskScore.value = (toothData.riskScore || 0) / 50;
                   child.material.uniforms.showPlaque.value = showPlaque;
+                  child.material.uniforms.bleedingFactor.value = bleedingFactor;
                 }
               }
             });
         }
     });
   }, [chartData, showPlaque]);
+
+  // Update blinking state for teeth that were updated from database
+  useEffect(() => {
+    Object.keys(toothMeshesRef.current).forEach(idStr => {
+      const toothId = parseInt(idStr);
+      const group = toothMeshesRef.current[toothId];
+      if (group) {
+        const isBlinking = blinkingTeeth.has(toothId);
+        group.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.material instanceof THREE.ShaderMaterial) {
+            if (child.material.uniforms.isBlinking) {
+              child.material.uniforms.isBlinking.value = isBlinking;
+            }
+          }
+        });
+      }
+    });
+  }, [blinkingTeeth]);
 
   // Handle transform changes from the control panel
   const handleTransformChange = (toothId: number, transform: ToothTransform) => {

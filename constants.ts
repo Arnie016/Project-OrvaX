@@ -72,44 +72,43 @@ export const INITIAL_CHART_DATA: ToothData[] = Array.from({ length: 32 }, (_, i)
     const tooth: ToothData = {
         id: id,
         measurements: {
-            [MeasurementType.POCKET_DEPTH]: {},
-            [MeasurementType.RECESSION]: {},
-            [MeasurementType.BLEEDING]: {},
-            [MeasurementType.PLAQUE]: {},
+            [MeasurementType.POCKET_DEPTH]: {
+                disto_buccal: 0,
+                mid_buccal: 0,
+                mesio_buccal: 0,
+                disto_lingual: 0,
+                mid_lingual: 0,
+                mesio_lingual: 0
+            },
+            [MeasurementType.RECESSION]: {
+                disto_buccal: 0,
+                mid_buccal: 0,
+                mesio_buccal: 0,
+                disto_lingual: 0,
+                mid_lingual: 0,
+                mesio_lingual: 0
+            },
+            [MeasurementType.BLEEDING]: {
+                disto_buccal: false,
+                mid_buccal: false,
+                mesio_buccal: false,
+                disto_lingual: false,
+                mid_lingual: false,
+                mesio_lingual: false
+            },
+            [MeasurementType.PLAQUE]: {
+                disto_buccal: false,
+                mid_buccal: false,
+                mesio_buccal: false,
+                disto_lingual: false,
+                mid_lingual: false,
+                mesio_lingual: false
+            },
         },
     };
 
-    // Add some interesting sample data
-    if (id === 3) {
-        tooth.measurements[MeasurementType.POCKET_DEPTH] = { disto_buccal: 4, mid_buccal: 5, mesio_buccal: 4 };
-        tooth.measurements[MeasurementType.RECESSION] = { disto_buccal: 1, mid_buccal: 2, mesio_buccal: 1 };
-        tooth.measurements[MeasurementType.BLEEDING] = { mid_buccal: true };
-    }
-    if (id === 7) {
-        tooth.measurements[MeasurementType.POCKET_DEPTH] = { disto_lingual: 4, mid_lingual: 4, mesio_lingual: 5 };
-        tooth.measurements[MeasurementType.RECESSION] = { disto_lingual: 2, mid_lingual: 3, mesio_lingual: 2 };
-        tooth.measurements[MeasurementType.PLAQUE] = { mid_lingual: true };
-    }
-     if (id === 14) {
-        tooth.measurements[MeasurementType.POCKET_DEPTH] = { mid_buccal: 7, disto_buccal: 6, mesio_buccal: 6 };
-        tooth.measurements[MeasurementType.RECESSION] = { mid_buccal: 3, disto_buccal: 2, mesio_buccal: 2 };
-        tooth.measurements[MeasurementType.BLEEDING] = { mid_buccal: true, disto_buccal: true };
-        tooth.furcation = { buccal: 1 };
-    }
-    if (id === 19) {
-        tooth.mobility = 1;
-        tooth.measurements[MeasurementType.POCKET_DEPTH] = { mid_buccal: 5, mid_lingual: 6 };
-        tooth.measurements[MeasurementType.RECESSION] = { mid_buccal: 3, mid_lingual: 3 };
-        tooth.measurements[MeasurementType.BLEEDING] = { mid_lingual: true };
-    }
-    if (id === 30) {
-        tooth.furcation = { buccal: 2 };
-        tooth.mobility = 2;
-        tooth.measurements[MeasurementType.POCKET_DEPTH] = { disto_buccal: 6, mid_buccal: 8, mesio_buccal: 6 };
-        tooth.measurements[MeasurementType.RECESSION] = { disto_buccal: 3, mid_buccal: 4, mesio_buccal: 3 };
-        tooth.measurements[MeasurementType.BLEEDING] = { mid_buccal: true, disto_buccal: true, mesio_buccal: true };
-        tooth.measurements[MeasurementType.PLAQUE] = { mid_buccal: true, disto_buccal: true, mesio_buccal: true };
-    }
+    // All teeth start with zero measurements (0 0 0 for PD and Recession)
+    // Data will be populated from the database sync after 2 seconds
     
     // Mark some teeth as missing
     if (id === 1 || id === 16 || id === 17 || id === 32) {

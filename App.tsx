@@ -1,10 +1,11 @@
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { ToothData, MeasurementType, MeasurementLocation, MeasurementSiteValue, PerioSiteMeasurements, NonSiteLocation } from './types.ts';
 import { INITIAL_CHART_DATA } from './constants.ts';
 import DentalChart3D from './components/PerioChart.tsx';
 import { InfoPanel } from './components/Tooth.tsx';
 import Toolbar from './components/Toolbar.tsx';
+import { fetchDbMeasurements, processDbMeasurements } from './dbDataSync.ts';
 
 // A custom hook to manage chart data logic, defined in-file to avoid adding new files.
 const useChartData = () => {
@@ -105,10 +106,13 @@ const useChartData = () => {
 
 function App() {
   const { chartData, updateChartData, overallScores } = useChartData();
-  const [selectedToothId, setSelectedToothId] = useState<number | null>(3);
+  const [selectedToothId, setSelectedToothId] = useState<number | null>(null);
   const [activeSurface, setActiveSurface] = useState<'buccal' | 'lingual' | null>('buccal');
   const [showPlaque, setShowPlaque] = useState(false);
   const [cameraControls, setCameraControls] = useState<any>(null);
+  const [blinkingTeeth, setBlinkingTeeth] = useState<Set<number>>(new Set());
+  const lastFetchTimeRef = useRef<string>('');
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const selectedToothData = useMemo(() => {
     return chartData.find(t => t.id === selectedToothId) || null;
@@ -140,6 +144,63 @@ function App() {
     setShowPlaque(prev => !prev);
   }, []);
 
+  // Function to sync data from database
+  const syncDatabaseData = useCallback(async () => {
+    // Fetch from Supabase API (change to 'local' for testing with test.json)
+    const measurements = await fetchDbMeasurements('supabase');
+    if (measurements.length === 0) return;
+
+    // Process measurements and apply updates
+    const { updates, updatedTeethIds } = processDbMeasurements(measurements);
+    
+    // Check if there are any new updates (comparing timestamps)
+    const latestTimestamp = measurements[measurements.length - 1]?.created_at || '';
+    if (latestTimestamp === lastFetchTimeRef.current) {
+      return; // No new data
+    }
+    
+    lastFetchTimeRef.current = latestTimestamp;
+
+    // Apply all updates
+    updates.forEach(update => {
+      updateChartData(update.toothId, update.location, update.type, update.value);
+    });
+
+    // Trigger blink animation for updated teeth
+    if (updatedTeethIds.length > 0) {
+      console.log('🔄 Database sync: Updated teeth', updatedTeethIds);
+      
+      setBlinkingTeeth(new Set(updatedTeethIds));
+      
+      // Stop blinking after 2 blinks (approximately 1 second)
+      setTimeout(() => {
+        setBlinkingTeeth(new Set());
+      }, 1000);
+    }
+  }, [updateChartData]);
+
+  // Start polling for database updates every 1 second (after 2 second delay)
+  useEffect(() => {
+    // Wait 2 seconds before starting database sync
+    const initialDelayTimeout = setTimeout(() => {
+      // Initial sync after 2 seconds
+      syncDatabaseData();
+
+      // Set up polling interval
+      pollingIntervalRef.current = setInterval(() => {
+        syncDatabaseData();
+      }, 1000); // Poll every 1 second
+    }, 2000); // Wait 2 seconds before first sync
+
+    // Cleanup on unmount
+    return () => {
+      clearTimeout(initialDelayTimeout);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, [syncDatabaseData]);
+
   return (
     <div className="w-screen h-screen font-sans">
        <header className="absolute top-0 left-0 w-full p-4 z-20 flex justify-between items-center pointer-events-none">
@@ -159,6 +220,7 @@ function App() {
         showPlaque={showPlaque}
         setCameraControls={setCameraControls}
         activeSurface={activeSurface}
+        blinkingTeeth={blinkingTeeth}
       />
       
       {selectedToothData && (
