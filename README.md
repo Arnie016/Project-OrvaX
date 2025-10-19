@@ -37,6 +37,13 @@ Optional
 
 <img alt="Webapp Screenshot" src="./public/images/Screenshot%202025-10-19%20at%207.51.02%E2%80%AFAM.png" />
 
+## Audio walkthrough
+
+<audio controls>
+  <source src="./public/audio/how-it-works.mp3" type="audio/mpeg" />
+  Your browser does not support the audio element.
+</audio>
+
 ## Training dataset
 
 - Source: [Hugging Face — periodontal-reasoning-40k](https://huggingface.co/datasets/Wildstash/periodontal-reasoning-40k)
