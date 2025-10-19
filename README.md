@@ -37,6 +37,30 @@ Optional
 
 <img alt="Webapp Screenshot" src="./public/images/Screenshot%202025-10-19%20at%207.51.02%E2%80%AFAM.png" />
 
+## Training dataset
+
+- Source: [Hugging Face — periodontal-reasoning-40k](https://huggingface.co/datasets/Wildstash/periodontal-reasoning-40k)
+- License: CC BY 4.0
+- Format: JSONL rows with `prompt`, `completion`, `label ∈ {1, -1}`
+
+Quick load example (Python):
+
+```python
+from datasets import load_dataset
+
+ds = load_dataset("Wildstash/periodontal-reasoning-40k", split="train")
+
+# Each row: {"prompt": str, "completion": str, "label": 1 or -1}
+print(ds[0])
+```
+
+DPO/KTO prep (optional):
+
+```python
+pos = ds.filter(lambda x: x["label"] == 1)
+neg = ds.filter(lambda x: x["label"] == -1)
+```
+
 ---
 
 ## 1️⃣ Overview
