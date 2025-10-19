@@ -39,8 +39,7 @@ Optional
 
 ## Audio walkthrough
 
-<audio controls>
-  <source src="./public/audio/how-it-works.mp3" type="audio/mpeg" />
+<audio controls src="https://raw.githubusercontent.com/Arnie016/Project-OrvaX/main/public/audio/how-it-works.mp3">
   Your browser does not support the audio element.
 </audio>
 
@@ -67,6 +66,68 @@ DPO/KTO prep (optional):
 pos = ds.filter(lambda x: x["label"] == 1)
 neg = ds.filter(lambda x: x["label"] == -1)
 ```
+
+DPO/KTO prep (optional):
+
+```python
+pos = ds.filter(lambda x: x["label"] == 1)
+neg = ds.filter(lambda x: x["label"] == -1)
+```
+
+## Off-policy KTO training (brief)
+
+We fine-tuned off-policy with KTO using the positive/negative labels:
+
+```python
+from datasets import load_dataset
+from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments
+from trl import KTOTrainer
+
+base_model = "mistralai/Mistral-7B-Instruct-v0.3"  # example; pick what fits your GPU
+tokenizer = AutoTokenizer.from_pretrained(base_model, use_fast=True)
+tokenizer.pad_token = tokenizer.eos_token
+
+ds = load_dataset("Wildstash/periodontal-reasoning-40k", split="train")
+
+def map_row(row):
+    return {
+        "prompt": row["prompt"],
+        "completion": row["completion"],
+        "label": 1 if row["label"] == 1 else -1,
+    }
+
+train_ds = ds.map(map_row, remove_columns=ds.column_names)
+
+model = AutoModelForCausalLM.from_pretrained(base_model, torch_dtype="auto")
+
+args = TrainingArguments(
+    output_dir="kto-out",
+    per_device_train_batch_size=1,  # single-GPU friendly
+    gradient_accumulation_steps=8,
+    learning_rate=5e-6,
+    num_train_epochs=1,
+    bf16=True,
+    logging_steps=50,
+    save_steps=1000,
+)
+
+trainer = KTOTrainer(
+    model=model,
+    tokenizer=tokenizer,
+    args=args,
+    train_dataset=train_ds,
+    max_target_length=256,
+    max_prompt_length=128,
+)
+
+trainer.train()
+trainer.save_model("kto-out")
+```
+
+Notes
+- Use the positive subset (label==1) to warm-start with SFT if desired, then KTO.
+- Keep sequence lengths modest to fit single GPU.
+- Dataset: [Hugging Face — periodontal-reasoning-40k](https://huggingface.co/datasets/Wildstash/periodontal-reasoning-40k)
 
 ---
 
