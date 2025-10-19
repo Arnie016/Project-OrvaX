@@ -43,6 +43,10 @@ Optional
   Your browser does not support the audio element.
 </audio>
 
+If the inline player doesn’t appear, use the direct link:
+
+`https://raw.githubusercontent.com/Arnie016/Project-OrvaX/main/public/audio/how-it-works.mp3`
+
 ## Training dataset
 
 - Source: [Hugging Face — periodontal-reasoning-40k](https://huggingface.co/datasets/Wildstash/periodontal-reasoning-40k)
@@ -128,6 +132,15 @@ Notes
 - Use the positive subset (label==1) to warm-start with SFT if desired, then KTO.
 - Keep sequence lengths modest to fit single GPU.
 - Dataset: [Hugging Face — periodontal-reasoning-40k](https://huggingface.co/datasets/Wildstash/periodontal-reasoning-40k)
+
+## Training run: single H100 (Prime Intellect.ai)
+
+- Hardware: 1× NVIDIA H100 (80 GB) via Prime Intellect.ai
+- Precision: bf16; gradient accumulation to keep microbatch small
+- Model: `mistralai/Mistral-7B-Instruct-v0.3` (example)
+- Data: [`Wildstash/periodontal-reasoning-40k`](https://huggingface.co/datasets/Wildstash/periodontal-reasoning-40k) (SFT warm-start on label==1 → KTO)
+- Key settings: `per_device_train_batch_size=1`, `grad_accumulation=8`, `lr=5e-6`, `max_prompt_length=128`, `max_target_length=256`
+- Rationale: off-policy KTO leverages preference-style labels without online rollouts; single GPU is sufficient with careful context/batch sizing
 
 ---
 
