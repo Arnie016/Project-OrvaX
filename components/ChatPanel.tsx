@@ -162,3 +162,4 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, toothData
 export default ChatPanel;
 
 
+
