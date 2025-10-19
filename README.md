@@ -39,13 +39,7 @@ Optional
 
 ## Audio walkthrough
 
-<audio controls src="https://raw.githubusercontent.com/Arnie016/Project-OrvaX/main/public/audio/how-it-works.mp3">
-  Your browser does not support the audio element.
-</audio>
-
-If the inline player doesn’t appear, use the direct link:
-
-`https://raw.githubusercontent.com/Arnie016/Project-OrvaX/main/public/audio/how-it-works.mp3`
+https://raw.githubusercontent.com/Arnie016/Project-OrvaX/main/public/audio/how-it-works.mp3
 
 ## Training dataset
 
